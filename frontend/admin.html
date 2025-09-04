@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Admin — Upload Attendance CSV</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            margin: 2rem;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        fieldset {
+            border: 1px solid #ddd;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        #onlyAuthed,
+        #onlyAdmin {
+            display: none;
+        }
+
+        .muted {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .ok {
+            color: #0a7a0a;
+        }
+
+        .err {
+            color: #b00020;
+        }
+
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+    </style>
+
+    <!-- Firebase (compat for simplicity on GH Pages) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth-compat.js"></script>
+
+    <script src="./firebase-init.js" defer></script>
+    <script src="./admin.js" defer></script>
+</head>
+
+<body>
+    <header>
+        <h1>Admin Upload</h1>
+        <div>
+            <span id="whoami" class="muted"></span>
+            <button id="signOutBtn" style="display:none;">Sign out</button>
+        </div>
+    </header>
+
+    <!-- Sign in (Email & Password) -->
+    <section id="signInBox">
+        <fieldset>
+            <legend>Sign in</legend>
+            <label>Email<br /><input id="email" type="email" autocomplete="username" /></label><br /><br />
+            <label>Password<br /><input id="password" type="password"
+                    autocomplete="current-password" /></label><br /><br />
+            <button id="signInBtn">Sign in</button>
+            <div id="authMsg" class="muted"></div>
+        </fieldset>
+    </section>
+
+    <!-- Visible to any signed-in user; the server still enforces role -->
+    <section id="onlyAuthed">
+        <fieldset>
+            <legend>Upload weekly CSV</legend>
+            <p class="muted">Expected columns (case/spacing tolerant): <code class="mono">External id</code>, <code
+                    class="mono">Rollclass name</code>, <code class="mono">Percentage present</code>.</p>
+            <input id="csvFile" type="file" accept=".csv,text/csv" />
+            <button id="uploadBtn">Upload</button>
+            <div id="uploadMsg" class="muted"></div>
+            <pre id="uploadResult" class="mono"></pre>
+        </fieldset>
+    </section>
+
+    <!-- Optional: show quick links to teacher read endpoints -->
+    <section id="onlyAdmin">
+        <fieldset>
+            <legend>Quick checks</legend>
+            <button id="checkMetaBtn">Check latest snapshot meta</button>
+            <button id="checkClassesBtn">List classes</button>
+            <div id="checkMsg" class="muted"></div>
+            <pre id="checkOut" class="mono"></pre>
+        </fieldset>
+    </section>
+</body>
+
+</html>
