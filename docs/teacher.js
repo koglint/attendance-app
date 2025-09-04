@@ -139,8 +139,8 @@ async function loadRows(rollClass) {
       return;
     }
 
-    // Optional: sort descending by pctPresent
-    rows.sort((a, b) => (b.pctPresent || 0) - (a.pctPresent || 0));
+    // Optional: sort descending by pctAttendance
+    rows.sort((a, b) => (b.pctAttendance || 0) - (a.pctAttendance || 0));
 
     const frag = document.createDocumentFragment();
     for (const r of rows) {
@@ -148,7 +148,7 @@ async function loadRows(rollClass) {
       const tdA = document.createElement("td");
       const tdB = document.createElement("td");
       tdA.textContent = r.externalId ?? "";
-      tdB.textContent = (r.pctPresent ?? "") === "" ? "" : Number(r.pctPresent).toFixed(1);
+      tdB.textContent = (r.pctAttendance ?? "") === "" ? "" : Number(r.pctAttendance).toFixed(1);
       tr.appendChild(tdA);
       tr.appendChild(tdB);
       frag.appendChild(tr);
