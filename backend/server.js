@@ -98,8 +98,8 @@ const REQUIRED_HEADERS = {
     "Rollclass name","Rollclass","Roll class name","Roll class",
     "Class","Homegroup","RollGroup","Roll group","Roll Class"
   ],
-  pctPresent: [
-    "Percentage present","Percentage Present","Present %","% Present",
+  pctAttendance: [
+    "Percentage Attendance","Percentage present","Percentage Present","Present %","% Present",
     "Attendance %","Attendance percent","Percent present"
   ]
 };
@@ -149,12 +149,12 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
     const headers = Object.keys(records[0]);
     const hExternal = findHeader(headers, REQUIRED_HEADERS.externalId);
     const hClass    = findHeader(headers, REQUIRED_HEADERS.rollClass);
-    const hPct      = findHeader(headers, REQUIRED_HEADERS.pctPresent);
+    const hPct      = findHeader(headers, REQUIRED_HEADERS.pctAttendance);
 
     if (!hExternal || !hClass || !hPct) {
       return res.status(400).json({
         error: "missing required columns",
-        required: ["External id","Rollclass name","Percentage present"],
+        required: ["External id","Rollclass name","Percentage Attendance"],
         found: headers
       });
     }
@@ -201,7 +201,7 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
       batch.set(ref, {
         externalId: externalIdRaw,
         rollClass,
-        pctPresent: clamp01(pct)
+        pctAttendance: clamp01(pct)
       }, { merge: false });
 
       inBatch++; written++;
@@ -217,7 +217,7 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
     // Flip "latest" pointer only after successful writes
     const schoolRef = db.collection("schools").doc(SCHOOL_ID);
     await schoolRef.set({ latestSnapshotId: snapshotRef.id }, { merge: true }); 
-    
+
     // Mark snapshot & upload finalized
     await snapshotRef.update({ isLatest: true });
     await uploadRef.update({ status: "processed", snapshotId: snapshotRef.id, rowCount: written });
@@ -290,7 +290,7 @@ app.get("/api/snapshots/latest/classes", requireAuth("teacher"), async (req, res
   }
 });
 
-// GET all rows for a class in latest snapshot (externalId + pctPresent only)
+// GET all rows for a class in latest snapshot (externalId + pctAttendance only)
 app.get("/api/snapshots/latest/classes/:rollClass/rows", requireAuth("teacher"), async (req, res) => {
   const { rollClass } = req.params;
   try {
@@ -305,7 +305,7 @@ app.get("/api/snapshots/latest/classes/:rollClass/rows", requireAuth("teacher"),
     const qs = await rowsRef.where("rollClass", "==", rollClass).get();
     const data = qs.docs.map(d => ({
       externalId: d.get("externalId"),
-      pctPresent: d.get("pctPresent")
+      pctAttendance: d.get("pctAttendance")
     }));
     res.json(data);
   } catch (e) {
