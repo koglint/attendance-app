@@ -1,5 +1,9 @@
 const express = require("express");
 const cors = require("cors");
+const multer = require("multer");
+const { parse } = require("csv-parse/sync");
+const crypto = require("crypto");
+
 
 const PORT = process.env.PORT || 3000;
 const SCHOOL_ID = process.env.SCHOOL_ID || "default";
@@ -77,6 +81,163 @@ function requireAuth(requiredRole) {
     }
   };
 }
+
+// Multer: keep files in memory (no disk writes)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 } // 25MB
+});
+
+// Header mapping helpers (tolerate case/spacing variants)
+const REQUIRED_HEADERS = {
+  externalId: [
+    "External id","ExternalId","Student ID","StudentId",
+    "External_id","ExternalID","ID","SentralId","Sentral ID"
+  ],
+  rollClass: [
+    "Rollclass name","Rollclass","Roll class name","Roll class",
+    "Class","Homegroup","RollGroup","Roll group","Roll Class"
+  ],
+  pctPresent: [
+    "Percentage present","Percentage Present","Present %","% Present",
+    "Attendance %","Attendance percent","Percent present"
+  ]
+};
+const normalize = h => String(h || "").toLowerCase().replace(/[^a-z0-9]/g,"");
+function findHeader(headers, candidates) {
+  const map = new Map();
+  headers.forEach(h => map.set(normalize(h), h));
+  for (const c of candidates) {
+    const hit = map.get(normalize(c));
+    if (hit) return hit;
+  }
+  return null;
+}
+const clamp01 = n => Math.max(0, Math.min(100, n));
+
+// Admin upload: accepts CSV and writes a new snapshot
+app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req, res) => {
+  try {
+    if (!admin || !db) return res.status(503).json({ error: "auth not initialised on server" });
+    if (!req.file || !req.file.buffer) return res.status(400).json({ error: "missing file" });
+
+    // Idempotency: checksum on raw bytes
+    const checksum = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
+    const uploadsColl = db.collection("schools").doc(SCHOOL_ID).collection("uploads");
+
+    // If we've processed this exact file before, return the prior result
+    const existing = await uploadsColl.where("checksum", "==", checksum)
+                                      .where("status", "==", "processed")
+                                      .limit(1).get();
+    if (!existing.empty) {
+      const doc = existing.docs[0];
+      const data = doc.data();
+      return res.json({
+        uploadId: doc.id,
+        snapshotId: data.snapshotId || null,
+        rowCount: data.rowCount || 0,
+        deduplicated: true
+      });
+    }
+
+    // Parse CSV (columns = object keys)
+    const text = req.file.buffer.toString("utf8");
+    const records = parse(text, { columns: true, skip_empty_lines: true, bom: true });
+
+    if (!records.length) return res.status(400).json({ error: "empty CSV" });
+
+    const headers = Object.keys(records[0]);
+    const hExternal = findHeader(headers, REQUIRED_HEADERS.externalId);
+    const hClass    = findHeader(headers, REQUIRED_HEADERS.rollClass);
+    const hPct      = findHeader(headers, REQUIRED_HEADERS.pctPresent);
+
+    if (!hExternal || !hClass || !hPct) {
+      return res.status(400).json({
+        error: "missing required columns",
+        required: ["External id","Rollclass name","Percentage present"],
+        found: headers
+      });
+    }
+
+    // Create upload + snapshot docs
+    const uploadRef = uploadsColl.doc();
+    await uploadRef.set({
+      filename: req.file.originalname || "upload.csv",
+      checksum,
+      uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
+      uploadedBy: req.user.uid,
+      rowCount: records.length,
+      status: "processing"
+    });
+
+    const snapsColl = db.collection("schools").doc(SCHOOL_ID).collection("snapshots");
+    const snapshotRef = snapsColl.doc();
+    await snapshotRef.set({
+      uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
+      uploadId: uploadRef.id,
+      isLatest: false
+    });
+
+    // Write rows (≤500 per batch)
+    const rowsColl = snapshotRef.collection("rows");
+    let batch = db.batch();
+    let inBatch = 0;
+    let written = 0;
+
+    for (const r of records) {
+      const externalIdRaw = String(r[hExternal] ?? "").trim();
+      const rollClass = String(r[hClass] ?? "").trim();
+
+      if (!externalIdRaw || !rollClass) continue;
+
+      // Coerce % present → number (strip % and spaces)
+      const rawPct = String(r[hPct] ?? "").replace("%", "").trim();
+      const pct = Number(rawPct);
+      if (!Number.isFinite(pct)) continue;
+
+      const docId = externalIdRaw.replace(/\//g, "_"); // avoid slashes in doc IDs
+      const ref = rowsColl.doc(docId);
+
+      batch.set(ref, {
+        externalId: externalIdRaw,
+        rollClass,
+        pctPresent: clamp01(pct)
+      }, { merge: false });
+
+      inBatch++; written++;
+      if (inBatch === 500) {
+        await batch.commit();
+        batch = db.batch();
+        inBatch = 0;
+      }
+    }
+
+    if (inBatch) await batch.commit();
+
+    // Flip "latest" pointer only after successful writes
+    const schoolRef = db.collection("schools").doc(SCHOOL_ID);
+    await schoolRef.set({ latestSnapshotId: snapshotRef.id }, { merge: true }); 
+    
+    // Mark snapshot & upload finalized
+    await snapshotRef.update({ isLatest: true });
+    await uploadRef.update({ status: "processed", snapshotId: snapshotRef.id, rowCount: written });
+
+    return res.json({ uploadId: uploadRef.id, snapshotId: snapshotRef.id, rowCount: written });
+  } catch (err) {
+    console.error("Upload failed:", err);
+    // Best-effort failure mark (ignore errors here)
+    try {
+      const uploads = db.collection("schools").doc(SCHOOL_ID).collection("uploads");
+      if (req.file) {
+        const checksum = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
+        const q = await uploads.where("checksum", "==", checksum).limit(1).get();
+        if (!q.empty) await uploads.doc(q.docs[0].id).update({ status: "failed" });
+      }
+    } catch {}
+    return res.status(500).json({ error: "upload failed" });
+  }
+});
+
 
 
 // --- Health check ---
