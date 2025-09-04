@@ -46,7 +46,8 @@ try {
 }
 
 // --- Auth middleware (Email/Password tokens) ---
-async function requireAuth(requiredRole) {
+// ✅ outer returns a function; inner can be async
+function requireAuth(requiredRole) {
   return async (req, res, next) => {
     if (!admin || !db) return res.status(503).json({ error: "auth not initialised on server" });
 
@@ -57,7 +58,7 @@ async function requireAuth(requiredRole) {
     let decoded;
     try {
       decoded = await admin.auth().verifyIdToken(idToken, true);
-    } catch (err) {
+    } catch {
       return res.status(401).json({ error: "invalid token" });
     }
 
@@ -71,11 +72,12 @@ async function requireAuth(requiredRole) {
       }
       req.user = { uid, role };
       next();
-    } catch (err) {
+    } catch {
       return res.status(500).json({ error: "role lookup failed" });
     }
   };
 }
+
 
 // --- Health check ---
 app.get("/healthz", (req, res) => {
