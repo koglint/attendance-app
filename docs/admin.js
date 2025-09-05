@@ -126,9 +126,9 @@ els.uploadBtn.addEventListener("click", async () => {
     if (!Number.isInteger(year) || year < 2000 || year > 2100)
       return setMsg(els.uploadMsg, "Please choose a valid Year", "error");
     if (![1,2,3,4].includes(term))
-      return setMsg(els.uploadMsg, "Please choose a valid Term (1–4)", "error");
+      return setMsg(els.uploadMsg, "Please choose a valid Term (1-4)", "error");
     if (!Number.isInteger(week) || week < 1 || week > 12)
-      return setMsg(els.uploadMsg, "Please choose a valid Week (1–12)", "error");
+      return setMsg(els.uploadMsg, "Please choose a valid Week (1-12)", "error");
     fd.append("year", String(year));
     fd.append("term", String(term));
     fd.append("week", String(week));

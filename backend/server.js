@@ -326,9 +326,6 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
     let inBatch = 0;
     let written = 0;
 
-    const clamp01 = (n) => Math.max(0, Math.min(100, n));
-
-
     for (const r of records) {
       const externalIdRaw = String(r[hExternal] ?? "").trim();
       const rollClass = String(r[hClass] ?? "").trim();
@@ -346,14 +343,16 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
         const prev = prevPctById.get(externalIdRaw);
         const status = compareTrend(curr, prev);
 
-        batch.set(
-        ref,
-        {
-            externalId: externalIdRaw,
-            rollClass,
-            pctAttendance: curr,
-            trend: status ?? null,
-            trendMeta: status ? {
+        // Build row payload without using FieldValue.delete()
+        const rowData = {
+        externalId: externalIdRaw,
+        rollClass,
+        pctAttendance: curr,
+        trend: status ?? null,
+        };
+
+        if (status) {
+        rowData.trendMeta = {
             year,
             term,
             week,
@@ -362,10 +361,11 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
             epsilon: TREND_EPSILON,
             version: "v1",
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            } : admin.firestore.FieldValue.delete(), // no trendMeta if not computable
-        },
-        { merge: false }
-        );
+        };
+        }
+
+        batch.set(ref, rowData, { merge: false });
+
 
       inBatch++;
       written++;
