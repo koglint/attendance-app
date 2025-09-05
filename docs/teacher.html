@@ -74,6 +74,15 @@
 
     <script src="./firebase-init.js" defer></script>
     <script src="./teacher.js" defer></script>
+
+    <style>
+        /* Hide all weekly % columns when the table has class 'hide-weeks' */
+        #dataTable.hide-weeks th.weekcol,
+        #dataTable.hide-weeks td.weekcol {
+            display: none;
+        }
+    </style>
+
 </head>
 
 <body>
@@ -124,6 +133,11 @@
 
         <button id="loadTermBtn">Load term</button>
         <button id="refreshBtn" title="Reload list">↻</button>
+        <label style="margin-left: 1rem;">
+            <input type="checkbox" id="toggleWeeks" />
+            Show weekly percentages
+        </label>
+
     </div>
 
     <div id="snapshotInfo" class="muted" style="margin-top:.5rem;">Pick a year & term, then Load.</div>

@@ -1,6 +1,8 @@
 // ==== CONFIG ====
 const BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com"; // your Render URL
 const DEBUG = false;
+let showWeeks = false; // default: weeks hidden
+
 
 // ====== UI refs ======
 const els = {
@@ -25,6 +27,9 @@ const els = {
   dataTable: document.getElementById("dataTable"),
   thead: document.querySelector("#dataTable thead"),
   tbody: document.querySelector("#dataTable tbody"),
+
+  toggleWeeks: document.getElementById("toggleWeeks"),
+
 };
 
 function setMsg(el, text, kind="info") {
@@ -51,6 +56,9 @@ function showSignedOutUI() {
   els.dataTable.style.display = "none";
   els.thead.innerHTML = "";
   els.tbody.innerHTML = "";
+  if (els.toggleWeeks) els.toggleWeeks.checked = false;
+    showWeeks = false;
+
 }
 
 function formatUploadedAt(uploadedAt) {
@@ -182,9 +190,11 @@ async function loadRollupForClass() {
 
     // Build header: ID | Avatar | Trend | W1..WN
     const trh = document.createElement("tr");
-    ["ID", "Avatar", "Trend", ...weeks.map(w => `W${w}`)].forEach(h => {
+    ["ID", "Avatar", "Trend", ...weeks.map(w => `W${w}`)].forEach((h, idx) => {
       const th = document.createElement("th");
       th.textContent = h;
+        if (idx >= 3) th.classList.add("weekcol"); // week columns start at index 3
+
       trh.appendChild(th);
     });
     els.thead.appendChild(trh);
@@ -205,27 +215,42 @@ async function loadRollupForClass() {
       tr.appendChild(tdAv);
       tr.appendChild(tdTr);
 
-      for (const v of r.weekValues || []) {
+        for (const v of r.weekValues || []) {
         const td = document.createElement("td");
+        td.classList.add("weekcol"); // mark as a weekly column
         if (v === null || v === undefined || v === "") {
-          td.textContent = "";
+            td.textContent = "";
         } else {
-          const n = Number(v);
-          td.textContent = Number.isFinite(n) ? n.toFixed(1) : "";
+            const n = Number(v);
+            td.textContent = Number.isFinite(n) ? n.toFixed(1) : "";
         }
         tr.appendChild(td);
-      }
+        }
+
 
       frag.appendChild(tr);
     }
     els.tbody.appendChild(frag);
+    applyWeekVisibility(); // ← hides or shows weekly columns
 
     els.dataTable.style.display = "table";
+
     setMsg(els.tableMsg, `${rows.length} students • Weeks shown: ${weeks.join(", ")}`, "ok");
   } catch (e) {
     setMsg(els.tableMsg, e.message || "Failed to load rollup", "error");
   }
 }
+
+function applyWeekVisibility() {
+  if (!els.dataTable) return;
+  if (showWeeks) {
+    els.dataTable.classList.remove("hide-weeks");
+  } else {
+    els.dataTable.classList.add("hide-weeks");
+  }
+  if (els.toggleWeeks) els.toggleWeeks.checked = showWeeks;
+}
+
 
 // ====== Events ======
 els.refreshBtn.addEventListener("click", async () => {
@@ -239,3 +264,9 @@ els.loadTermBtn.addEventListener("click", async () => {
 els.classSelect.addEventListener("change", () => {
   loadRollupForClass();
 });
+
+els.toggleWeeks.addEventListener("change", () => {
+  showWeeks = !!els.toggleWeeks.checked;
+  applyWeekVisibility();
+});
+
