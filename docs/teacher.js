@@ -1,5 +1,6 @@
 // ==== CONFIG ====
 const BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com"; // your Render URL
+const DEBUG = false;
 
 // ====== UI refs ======
 const els = {
@@ -13,19 +14,22 @@ const els = {
 
   onlyAuthed: document.getElementById("onlyAuthed"),
   snapshotInfo: document.getElementById("snapshotInfo"),
+
+  yearSelect: document.getElementById("yearSelect"),
+  termSelect: document.getElementById("termSelect"),
   classSelect: document.getElementById("classSelect"),
+  loadTermBtn: document.getElementById("loadTermBtn"),
   refreshBtn: document.getElementById("refreshBtn"),
 
   tableMsg: document.getElementById("tableMsg"),
   dataTable: document.getElementById("dataTable"),
+  thead: document.querySelector("#dataTable thead"),
   tbody: document.querySelector("#dataTable tbody"),
 };
 
 function setMsg(el, text, kind="info") {
   el.textContent = text || "";
-  el.className = kind === "error" ? "err"
-             : kind === "ok" ? "ok"
-             : "muted";
+  el.className = kind === "error" ? "err" : kind === "ok" ? "ok" : "muted";
 }
 
 function showAuthedUI(user) {
@@ -41,16 +45,16 @@ function showSignedOutUI() {
   els.signOutBtn.style.display = "none";
   els.whoami.textContent = "";
   setMsg(els.authMsg, "");
-  setMsg(els.snapshotInfo, "");
+  setMsg(els.snapshotInfo, "Pick a year & term, then Load.");
   setMsg(els.tableMsg, "Choose a class to view.");
   els.classSelect.innerHTML = `<option value="">(select a class)</option>`;
   els.dataTable.style.display = "none";
+  els.thead.innerHTML = "";
   els.tbody.innerHTML = "";
 }
 
 function formatUploadedAt(uploadedAt) {
-  // Handle Firestore timestamp objects {_seconds, _nanoseconds} or ISO strings/null
-  if (!uploadedAt) return "No snapshot yet";
+  if (!uploadedAt) return "";
   try {
     if (typeof uploadedAt === "string") return new Date(uploadedAt).toLocaleString();
     if (uploadedAt._seconds) return new Date(uploadedAt._seconds * 1000).toLocaleString();
@@ -62,11 +66,10 @@ function formatUploadedAt(uploadedAt) {
 firebaseAuth.onAuthStateChanged(async (user) => {
   if (!user) return showSignedOutUI();
   showAuthedUI(user);
-  await loadSnapshotMetaAndClasses();
+  await populateTerms(); // fill year/term from server
 });
 
 els.signOutBtn.addEventListener("click", () => firebaseAuth.signOut());
-
 els.signInBtn.addEventListener("click", async () => {
   setMsg(els.authMsg, "Signing in...");
   try {
@@ -77,106 +80,162 @@ els.signInBtn.addEventListener("click", async () => {
   }
 });
 
-// ====== Data loading ======
+// ====== Networking ======
 async function authedFetch(path) {
   const user = firebaseAuth.currentUser;
   if (!user) throw new Error("Not signed in");
   const token = await user.getIdToken();
-  const resp = await fetch(`${BACKEND_BASE_URL}${path}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const url = `${BACKEND_BASE_URL}${path}`;
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (DEBUG) console.log("[fetch]", path, "→", resp.status);
   if (resp.status === 401) throw new Error("Not authorised (401)");
   return resp;
 }
 
-async function loadSnapshotMetaAndClasses() {
+// ====== Term & class loading ======
+async function populateTerms() {
   try {
-    setMsg(els.snapshotInfo, "Loading…");
+    setMsg(els.snapshotInfo, "Loading terms…");
+    const terms = await (await authedFetch("/api/terms")).json();
+    if (DEBUG) console.log("[terms]", terms);
 
-    // meta (now returns {snapshotId, uploadedAt, year, term, week, label})
-    const m = await (await authedFetch("/api/snapshots/latest/meta")).json();
-    if (!m.snapshotId) {
-      setMsg(els.snapshotInfo, "No snapshot yet — ask admin to upload a CSV");
-      els.classSelect.innerHTML = `<option value="">(no classes)</option>`;
+    if (!Array.isArray(terms) || terms.length === 0) {
+      setMsg(els.snapshotInfo, "No term data yet — ask admin to upload CSVs", "error");
       return;
     }
 
-    // Choose the nicest text to show: label > composed Y/T/W > snapshotId
-    const ytw =
-      m.label ||
-      (m.year && m.term && m.week ? `${m.year} Term ${m.term} Week ${m.week}` : null);
+    // Build Year options based on returned terms
+    const years = Array.from(new Set(terms.map(t => t.year))).sort((a,b) => b - a);
+    els.yearSelect.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join("");
 
-    const uploaded = formatUploadedAt(m.uploadedAt);
-    const line = ytw ? `${ytw} • Uploaded: ${uploaded}` : `Snapshot: ${m.snapshotId} • Uploaded: ${uploaded}`;
-    setMsg(els.snapshotInfo, line);
+    // Choose latest term by default (first item is newest due to sort)
+    els.yearSelect.value = String(terms[0].year);
+    els.termSelect.value = String(terms[0].term);
 
-    // classes
-    const classes = await (await authedFetch("/api/snapshots/latest/classes")).json();
-    if (!Array.isArray(classes) || classes.length === 0) {
-      els.classSelect.innerHTML = `<option value="">(no classes)</option>`;
-      return;
-    }
-    const current = els.classSelect.value;
-    els.classSelect.innerHTML =
-      `<option value="">(select a class)</option>` +
-      classes.map(c => `<option value="${encodeURIComponent(c.rollClass)}">${c.rollClass}</option>`).join("");
-
-    // keep selection if still present
-    if (current && [...els.classSelect.options].some(o => o.value === current)) {
-      els.classSelect.value = current;
-      if (current) { loadRows(decodeURIComponent(current)); }
-    }
+    // Show a quick “weeks present” note
+    const weeks = terms.find(t => t.year === terms[0].year && t.term === terms[0].term)?.weeks || [];
+    setMsg(els.snapshotInfo, `${terms[0].year} Term ${terms[0].term} • Weeks: ${weeks.join(", ")}`);
+    await loadClassesForSelectedTerm();
   } catch (e) {
-    setMsg(els.snapshotInfo, e.message || "Failed to load snapshot/classes", "error");
+    setMsg(els.snapshotInfo, e.message || "Failed to load terms", "error");
   }
 }
 
+async function loadClassesForSelectedTerm() {
+  const year = Number(els.yearSelect.value);
+  const term = Number(els.termSelect.value);
+  if (!Number.isInteger(year) || ![1,2,3,4].includes(term)) {
+    setMsg(els.snapshotInfo, "Pick a valid year and term", "error");
+    return;
+  }
+  try {
+    setMsg(els.snapshotInfo, `Loading classes for ${year} Term ${term}…`);
+    const classes = await (await authedFetch(`/api/terms/${year}/${term}/classes`)).json();
+    if (DEBUG) console.log("[classes]", classes);
 
-async function loadRows(rollClass) {
+    if (!Array.isArray(classes) || classes.length === 0) {
+      els.classSelect.innerHTML = `<option value="">(no classes)</option>`;
+      setMsg(els.snapshotInfo, `No classes found for ${year} Term ${term}`);
+      return;
+    }
+    els.classSelect.innerHTML = `<option value="">(select a class)</option>` +
+      classes.map(c => `<option value="${encodeURIComponent(c.rollClass)}">${c.rollClass}</option>`).join("");
+
+    // Clear the table until a class is chosen for this term
+    els.thead.innerHTML = "";
+    els.tbody.innerHTML = "";
+    els.dataTable.style.display = "none";
+    setMsg(els.tableMsg, "Choose a class to view.");
+  
+
+    setMsg(els.snapshotInfo, `${year} Term ${term} • ${classes.length} classes`);
+  } catch (e) {
+    setMsg(els.snapshotInfo, e.message || "Failed to load classes", "error");
+  }
+}
+
+// ====== Rollup (table) ======
+async function loadRollupForClass() {
+  const rollClass = els.classSelect.value ? decodeURIComponent(els.classSelect.value) : "";
+  const year = Number(els.yearSelect.value);
+  const term = Number(els.termSelect.value);
   if (!rollClass) {
     els.dataTable.style.display = "none";
     els.tbody.innerHTML = "";
+    els.thead.innerHTML = "";
     setMsg(els.tableMsg, "Choose a class to view.");
     return;
   }
+
   try {
     setMsg(els.tableMsg, "Loading…");
     els.dataTable.style.display = "none";
     els.tbody.innerHTML = "";
+    els.thead.innerHTML = "";
 
-    const enc = encodeURIComponent(rollClass);
-    const rows = await (await authedFetch(`/api/snapshots/latest/classes/${enc}/rows`)).json();
+    const encRC = encodeURIComponent(rollClass);
+    const data = await (await authedFetch(`/api/terms/${year}/${term}/classes/${encRC}/rollup`)).json();
+    if (DEBUG) console.log("[rollup]", data);
 
-    if (!Array.isArray(rows) || rows.length === 0) {
-      setMsg(els.tableMsg, "No rows for this class", "info");
-      return;
-    }
+    const weeks = Array.isArray(data.weeks) ? data.weeks.slice(0, 12) : [];
+    const rows = Array.isArray(data.rows) ? data.rows : [];
 
-    // Optional: sort descending by pctAttendance
-    rows.sort((a, b) => (b.pctAttendance || 0) - (a.pctAttendance || 0));
+    // Build header: ID | Avatar | Trend | W1..WN
+    const trh = document.createElement("tr");
+    ["ID", "Avatar", "Trend", ...weeks.map(w => `W${w}`)].forEach(h => {
+      const th = document.createElement("th");
+      th.textContent = h;
+      trh.appendChild(th);
+    });
+    els.thead.appendChild(trh);
 
+    // Rows
     const frag = document.createDocumentFragment();
     for (const r of rows) {
       const tr = document.createElement("tr");
-      const tdA = document.createElement("td");
-      const tdB = document.createElement("td");
-      tdA.textContent = r.externalId ?? "";
-      tdB.textContent = (r.pctAttendance ?? "") === "" ? "" : Number(r.pctAttendance).toFixed(1);
-      tr.appendChild(tdA);
-      tr.appendChild(tdB);
+      const tdId = document.createElement("td");
+      const tdAv = document.createElement("td");
+      const tdTr = document.createElement("td");
+
+      tdId.textContent = r.externalId ?? "";
+      tdAv.textContent = ""; // placeholder for future avatar
+      tdTr.textContent = ""; // placeholder for future trend
+
+      tr.appendChild(tdId);
+      tr.appendChild(tdAv);
+      tr.appendChild(tdTr);
+
+      for (const v of r.weekValues || []) {
+        const td = document.createElement("td");
+        if (v === null || v === undefined || v === "") {
+          td.textContent = "";
+        } else {
+          const n = Number(v);
+          td.textContent = Number.isFinite(n) ? n.toFixed(1) : "";
+        }
+        tr.appendChild(td);
+      }
+
       frag.appendChild(tr);
     }
     els.tbody.appendChild(frag);
+
     els.dataTable.style.display = "table";
-    setMsg(els.tableMsg, `${rows.length} students`, "ok");
+    setMsg(els.tableMsg, `${rows.length} students • Weeks shown: ${weeks.join(", ")}`, "ok");
   } catch (e) {
-    setMsg(els.tableMsg, e.message || "Failed to load rows", "error");
+    setMsg(els.tableMsg, e.message || "Failed to load rollup", "error");
   }
 }
 
-// Events
-els.classSelect.addEventListener("change", (e) => {
-  const val = e.target.value ? decodeURIComponent(e.target.value) : "";
-  loadRows(val);
+// ====== Events ======
+els.refreshBtn.addEventListener("click", async () => {
+  await populateTerms();
 });
-els.refreshBtn.addEventListener("click", () => loadSnapshotMetaAndClasses());
+
+els.loadTermBtn.addEventListener("click", async () => {
+  await loadClassesForSelectedTerm();
+});
+
+els.classSelect.addEventListener("change", () => {
+  loadRollupForClass();
+});

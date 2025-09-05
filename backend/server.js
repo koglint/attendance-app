@@ -394,6 +394,137 @@ app.get("/api/snapshots/latest/classes/:rollClass/rows", requireAuth("teacher"),
   }
 });
 
+// List all available terms (grouped by year/term), with the weeks present
+app.get("/api/terms", requireAuth("teacher"), async (req, res) => {
+  try {
+    const snaps = await db
+      .collection("schools")
+      .doc(SCHOOL_ID)
+      .collection("snapshots")
+      .get();
+
+    const byTerm = new Map(); // key = `${year}-${term}` → {year, term, weeks:Set}
+    snaps.forEach((d) => {
+      const y = d.get("year");
+      const t = d.get("term");
+      const w = d.get("week");
+      if (!Number.isInteger(y) || !Number.isInteger(t) || !Number.isInteger(w)) return;
+      const key = `${y}-${t}`;
+      const cur = byTerm.get(key) || { year: y, term: t, weeks: new Set() };
+      cur.weeks.add(w);
+      byTerm.set(key, cur);
+    });
+
+    const terms = Array.from(byTerm.values()).map((v) => ({
+      year: v.year,
+      term: v.term,
+      weeks: Array.from(v.weeks).sort((a, b) => a - b),
+    }));
+
+    // Sort newest first: by year desc, then term desc
+    terms.sort((a, b) => (b.year - a.year) || (b.term - a.term));
+    res.json(terms);
+  } catch (e) {
+    console.error("terms list failed:", e);
+    res.status(500).json({ error: "failed to list terms" });
+  }
+});
+
+// List roll classes for a specific year/term (union across that term's snapshots)
+app.get("/api/terms/:year/:term/classes", requireAuth("teacher"), async (req, res) => {
+  try {
+    const year = Number(req.params.year);
+    const term = Number(req.params.term);
+    if (!Number.isInteger(year) || ![1,2,3,4].includes(term)) {
+      return res.status(400).json({ error: "invalid year/term" });
+    }
+
+    const snapsQS = await db
+      .collection("schools").doc(SCHOOL_ID)
+      .collection("snapshots")
+      .where("year", "==", year)
+      .where("term", "==", term)
+      .get();
+
+    const classes = new Set();
+    for (const snap of snapsQS.docs) {
+      const rowsSnap = await snap.ref.collection("rows").select("rollClass").get();
+      rowsSnap.forEach(r => {
+        const rc = r.get("rollClass");
+        if (rc) classes.add(rc);
+      });
+    }
+
+    res.json(Array.from(classes).sort().map(rollClass => ({ rollClass })));
+  } catch (e) {
+    console.error("term classes failed:", e);
+    res.status(500).json({ error: "failed to list term classes" });
+  }
+});
+
+// For a given year/term + class, return a rollup table across weeks (max 12)
+app.get("/api/terms/:year/:term/classes/:rollClass/rollup", requireAuth("teacher"), async (req, res) => {
+  try {
+    const year = Number(req.params.year);
+    const term = Number(req.params.term);
+    const rollClass = req.params.rollClass; // express decodes %20 etc.
+    if (!Number.isInteger(year) || ![1,2,3,4].includes(term) || !rollClass) {
+      return res.status(400).json({ error: "invalid parameters" });
+    }
+
+    const snapsQS = await db
+      .collection("schools").doc(SCHOOL_ID)
+      .collection("snapshots")
+      .where("year", "==", year)
+      .where("term", "==", term)
+      .orderBy("week", "asc")
+      .get();
+
+    const weekRefs = [];
+    snapsQS.forEach(d => {
+      const w = d.get("week");
+      if (Number.isInteger(w)) weekRefs.push({ week: w, ref: d.ref });
+    });
+
+    // Cap at 12 weeks (display order is weeks array)
+    const weeks = weekRefs.map(x => x.week).slice(0, 12);
+
+    // Build student → per-week map
+    const byStudent = new Map(); // externalId → { externalId, weeks: { [week]: pct } }
+
+    for (const { week, ref } of weekRefs.slice(0, 12)) {
+      const qs = await ref.collection("rows")
+        .where("rollClass", "==", rollClass)
+        .select("externalId", "pctAttendance")
+        .get();
+
+      qs.forEach(r => {
+        const id = r.get("externalId");
+        if (!id) return;
+        const pct = r.get("pctAttendance");
+        const cur = byStudent.get(id) || { externalId: id, weeks: {} };
+        cur.weeks[week] = (typeof pct === "number") ? pct : null;
+        byStudent.set(id, cur);
+      });
+    }
+
+    const rows = Array.from(byStudent.values())
+      .sort((a, b) => String(a.externalId).localeCompare(String(b.externalId)))
+      .map(s => ({
+        externalId: s.externalId,
+        avatar: null,     // placeholder for future image URL
+        trend: null,      // placeholder for future badge (diamond/platinum/etc.)
+        weekValues: weeks.map(w => (s.weeks[w] ?? null))
+      }));
+
+    res.json({ year, term, rollClass, weeks, rows });
+  } catch (e) {
+    console.error("term rollup failed:", e);
+    res.status(500).json({ error: "failed to build rollup" });
+  }
+});
+
+
 app.listen(PORT, () => {
   console.log(`attendance-api listening on ${PORT}`);
 });

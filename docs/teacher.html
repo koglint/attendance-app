@@ -99,19 +99,47 @@
 
     <!-- Main content -->
     <section id="onlyAuthed">
-        <fieldset>
-            <legend>Latest snapshot</legend>
-            <div id="snapshotInfo" class="muted">Loading…</div>
-            <div style="margin-top: .5rem;">
-                <label>
-                    Class:&nbsp;
-                    <select id="classSelect">
-                        <option value="">(select a class)</option>
-                    </select>
-                </label>
-                <button id="refreshBtn" title="Reload list">↻</button>
-            </div>
-        </fieldset>
+<fieldset>
+    <legend>Choose term & class</legend>
+
+    <div style="display:flex; gap:1rem; align-items:end; flex-wrap:wrap">
+        <label>Year<br />
+            <select id="yearSelect"></select>
+        </label>
+
+        <label>Term<br />
+            <select id="termSelect">
+                <option value="1">Term 1</option>
+                <option value="2">Term 2</option>
+                <option value="3">Term 3</option>
+                <option value="4">Term 4</option>
+            </select>
+        </label>
+
+        <label>Class<br />
+            <select id="classSelect">
+                <option value="">(select a class)</option>
+            </select>
+        </label>
+
+        <button id="loadTermBtn">Load term</button>
+        <button id="refreshBtn" title="Reload list">↻</button>
+    </div>
+
+    <div id="snapshotInfo" class="muted" style="margin-top:.5rem;">Pick a year & term, then Load.</div>
+</fieldset>
+
+<fieldset>
+    <legend>Attendance by week (max 12)</legend>
+    <div id="tableMsg" class="muted">Choose a class to view.</div>
+    <table id="dataTable" style="display:none; width:100%; border-collapse:collapse;">
+        <thead>
+            <!-- Header will be created dynamically: ID | Avatar | Trend | W1 .. WN -->
+        </thead>
+        <tbody></tbody>
+    </table>
+</fieldset>
+
 
         <fieldset>
             <legend>External ID &amp; % Present</legend>
