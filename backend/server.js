@@ -99,7 +99,7 @@ const REQUIRED_HEADERS = {
     "Class","Homegroup","RollGroup","Roll group","Roll Class"
   ],
   pctAttendance: [
-    "Percentage Attendance","Percentage present","Percentage Present","Present %","% Present",
+    "Percentage Attendance", "Percentage attendance", "percentage attendance", "Percentage present","Percentage Present","Present %","% Present",
     "Attendance %","Attendance percent","Percent present"
   ]
 };
@@ -186,7 +186,11 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
       uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
       uploadedBy: req.user.uid,
       rowCount: records.length,
-      status: "processing"
+      status: "processing",
+        year,
+        term,
+        week,
+        label
     });
 
     const snapsColl = db.collection("schools").doc(SCHOOL_ID).collection("snapshots");
@@ -194,7 +198,11 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
     await snapshotRef.set({
       uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
       uploadId: uploadRef.id,
-      isLatest: false
+      isLatest: false,
+        year,
+        term,
+        week,
+        label
     });
 
     // Write rows (≤500 per batch)

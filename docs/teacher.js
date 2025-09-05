@@ -92,14 +92,24 @@ async function authedFetch(path) {
 async function loadSnapshotMetaAndClasses() {
   try {
     setMsg(els.snapshotInfo, "Loading…");
-    // meta
+
+    // meta (now returns {snapshotId, uploadedAt, year, term, week, label})
     const m = await (await authedFetch("/api/snapshots/latest/meta")).json();
     if (!m.snapshotId) {
       setMsg(els.snapshotInfo, "No snapshot yet — ask admin to upload a CSV");
       els.classSelect.innerHTML = `<option value="">(no classes)</option>`;
       return;
     }
-    setMsg(els.snapshotInfo, `Snapshot: ${m.snapshotId} • Uploaded at: ${formatUploadedAt(m.uploadedAt)}`);
+
+    // Choose the nicest text to show: label > composed Y/T/W > snapshotId
+    const ytw =
+      m.label ||
+      (m.year && m.term && m.week ? `${m.year} Term ${m.term} Week ${m.week}` : null);
+
+    const uploaded = formatUploadedAt(m.uploadedAt);
+    const line = ytw ? `${ytw} • Uploaded: ${uploaded}` : `Snapshot: ${m.snapshotId} • Uploaded: ${uploaded}`;
+    setMsg(els.snapshotInfo, line);
+
     // classes
     const classes = await (await authedFetch("/api/snapshots/latest/classes")).json();
     if (!Array.isArray(classes) || classes.length === 0) {
@@ -107,8 +117,10 @@ async function loadSnapshotMetaAndClasses() {
       return;
     }
     const current = els.classSelect.value;
-    els.classSelect.innerHTML = `<option value="">(select a class)</option>` +
+    els.classSelect.innerHTML =
+      `<option value="">(select a class)</option>` +
       classes.map(c => `<option value="${encodeURIComponent(c.rollClass)}">${c.rollClass}</option>`).join("");
+
     // keep selection if still present
     if (current && [...els.classSelect.options].some(o => o.value === current)) {
       els.classSelect.value = current;
@@ -118,6 +130,7 @@ async function loadSnapshotMetaAndClasses() {
     setMsg(els.snapshotInfo, e.message || "Failed to load snapshot/classes", "error");
   }
 }
+
 
 async function loadRows(rollClass) {
   if (!rollClass) {
