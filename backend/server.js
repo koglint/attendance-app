@@ -463,6 +463,7 @@ app.get("/api/terms/:year/:term/classes", requireAuth("teacher"), async (req, re
 });
 
 // For a given year/term + class, return a rollup table across weeks (max 12)
+// For a given year/term + class, return a rollup table across weeks (max 12)
 app.get("/api/terms/:year/:term/classes/:rollClass/rollup", requireAuth("teacher"), async (req, res) => {
   try {
     const year = Number(req.params.year);
@@ -472,27 +473,30 @@ app.get("/api/terms/:year/:term/classes/:rollClass/rollup", requireAuth("teacher
       return res.status(400).json({ error: "invalid parameters" });
     }
 
+    // Query without orderBy to avoid composite index; sort weeks in JS
     const snapsQS = await db
       .collection("schools").doc(SCHOOL_ID)
       .collection("snapshots")
       .where("year", "==", year)
       .where("term", "==", term)
-      .orderBy("week", "asc")
       .get();
 
+    // Build list of { week, ref } and sort by week
     const weekRefs = [];
     snapsQS.forEach(d => {
       const w = d.get("week");
       if (Number.isInteger(w)) weekRefs.push({ week: w, ref: d.ref });
     });
+    weekRefs.sort((a, b) => a.week - b.week);
 
-    // Cap at 12 weeks (display order is weeks array)
-    const weeks = weekRefs.map(x => x.week).slice(0, 12);
+    // Cap at 12 weeks and extract week numbers for the header order
+    const limited = weekRefs.slice(0, 12);
+    const weeks = limited.map(x => x.week);
 
     // Build student → per-week map
     const byStudent = new Map(); // externalId → { externalId, weeks: { [week]: pct } }
 
-    for (const { week, ref } of weekRefs.slice(0, 12)) {
+    for (const { week, ref } of limited) {
       const qs = await ref.collection("rows")
         .where("rollClass", "==", rollClass)
         .select("externalId", "pctAttendance")
@@ -513,7 +517,7 @@ app.get("/api/terms/:year/:term/classes/:rollClass/rollup", requireAuth("teacher
       .map(s => ({
         externalId: s.externalId,
         avatar: null,     // placeholder for future image URL
-        trend: null,      // placeholder for future badge (diamond/platinum/etc.)
+        trend: null,      // placeholder for future badge
         weekValues: weeks.map(w => (s.weeks[w] ?? null))
       }));
 
@@ -523,6 +527,7 @@ app.get("/api/terms/:year/:term/classes/:rollClass/rollup", requireAuth("teacher
     res.status(500).json({ error: "failed to build rollup" });
   }
 });
+
 
 
 app.listen(PORT, () => {
