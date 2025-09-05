@@ -9,7 +9,9 @@
     <style>
         body {
             font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-            margin: 2rem;
+            margin:1rem 2rem;
+            background-color: #274472;
+            color: #ffffff;
         }
 
         header {
@@ -20,7 +22,7 @@
         }
 
         fieldset {
-            border: 1px solid #ddd;
+            border: 1px solid #e7f802;
             padding: 1rem;
             margin: 1rem 0;
         }
@@ -30,7 +32,7 @@
         }
 
         .muted {
-            color: #666;
+            color: #ffffff;
             font-size: 0.9rem;
         }
 
@@ -53,13 +55,13 @@
 
         th,
         td {
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #e7f802;
             padding: 8px;
             text-align: left;
         }
 
         th {
-            background: #fafafa;
+            background: #274472;
             position: sticky;
             top: 0;
         }
@@ -83,6 +85,36 @@
             display: block;
             }
 
+            /* Compact two-column layout (used when weekly % are hidden) */
+            #compactGrid { display: none; }
+            .compact-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+            align-items: start;
+            }
+
+            .mini-table {
+            width: 100%;
+            border-collapse: collapse;
+            }
+            .mini-table th,
+            .mini-table td {
+            border-bottom: 1px solid #274472;
+            padding: 8px;
+            text-align: left;
+            }
+            .mini-table th {
+            background: #274472;
+            position: sticky;
+            top: 0;
+            }
+
+            /* Ensure the wide table can scroll if needed when weeks are visible */
+            #dataTable {
+            width: 100%;
+            border-collapse: collapse;
+            }
 
     </style>
 
@@ -173,13 +205,19 @@
 <fieldset>
     <legend>Attendance</legend>
     <div id="tableMsg" class="muted">Choose a class to view.</div>
-    <table id="dataTable" style="display:none; width:100%; border-collapse:collapse;">
+
+    <!-- Wide table (used when weeks are shown) -->
+    <table id="dataTable" style="display:none;">
         <thead>
             <!-- Header will be created dynamically: ID | Avatar | Trend | W1 .. WN -->
         </thead>
         <tbody></tbody>
     </table>
+
+    <!-- Compact two-column layout (used when weeks are hidden) -->
+    <div id="compactGrid" class="compact-grid" aria-hidden="true"></div>
 </fieldset>
+
 
     </section>
     <script>

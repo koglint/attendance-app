@@ -13,31 +13,37 @@ function asset(path) {
 
 // ====== UI refs ======
 const els = {
-  signInBox: document.getElementById("signInBox"),
-  whoami: document.getElementById("whoami"),
-  signOutBtn: document.getElementById("signOutBtn"),
-  signInBtn: document.getElementById("signInBtn"),
-  email: document.getElementById("email"),
-  password: document.getElementById("password"),
-  authMsg: document.getElementById("authMsg"),
-  authForm: document.getElementById("authForm"),           
+    signInBox: document.getElementById("signInBox"),
+    whoami: document.getElementById("whoami"),
+    signOutBtn: document.getElementById("signOutBtn"),
+    signInBtn: document.getElementById("signInBtn"),
+    email: document.getElementById("email"),
+    password: document.getElementById("password"),
+    authMsg: document.getElementById("authMsg"),
+    authForm: document.getElementById("authForm"),           
 
 
-  onlyAuthed: document.getElementById("onlyAuthed"),
-  snapshotInfo: document.getElementById("snapshotInfo"),
+    onlyAuthed: document.getElementById("onlyAuthed"),
+    snapshotInfo: document.getElementById("snapshotInfo"),
 
-  yearSelect: document.getElementById("yearSelect"),
-  termSelect: document.getElementById("termSelect"),
-  classSelect: document.getElementById("classSelect"),
-  loadTermBtn: document.getElementById("loadTermBtn"),
-  refreshBtn: document.getElementById("refreshBtn"),
+    yearSelect: document.getElementById("yearSelect"),
+    termSelect: document.getElementById("termSelect"),
+    classSelect: document.getElementById("classSelect"),
+    loadTermBtn: document.getElementById("loadTermBtn"),
+    refreshBtn: document.getElementById("refreshBtn"),
 
-  tableMsg: document.getElementById("tableMsg"),
-  dataTable: document.getElementById("dataTable"),
-  thead: document.querySelector("#dataTable thead"),
-  tbody: document.querySelector("#dataTable tbody"),
+    tableMsg: document.getElementById("tableMsg"),
+    dataTable: document.getElementById("dataTable"),
+    thead: document.querySelector("#dataTable thead"),
+    tbody: document.querySelector("#dataTable tbody"),
 
-  toggleWeeks: document.getElementById("toggleWeeks"),
+    toggleWeeks: document.getElementById("toggleWeeks"),
+
+    tbody: document.querySelector("#dataTable tbody"),
+
+    toggleWeeks: document.getElementById("toggleWeeks"),
+    compactGrid: document.getElementById("compactGrid"),
+
 
 };
 
@@ -279,106 +285,184 @@ function seededShuffleInPlace(a, seedStr) {
   return a;
 }
 
+function buildMiniTable(rowsSubset, trendMap) {
+  const table = document.createElement("table");
+  table.className = "mini-table";
+
+  const thead = document.createElement("thead");
+  const trh = document.createElement("tr");
+  ["ID", "Avatar", "Trend"].forEach(h => {
+    const th = document.createElement("th");
+    th.textContent = h;
+    trh.appendChild(th);
+  });
+  thead.appendChild(trh);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  rowsSubset.forEach(r => {
+    const tr = document.createElement("tr");
+
+    const tdId = document.createElement("td");
+    tdId.textContent = r.externalId ?? "";
+
+    const tdAv = document.createElement("td");
+    tdAv.textContent = ""; // reserved for avatars later
+
+    const tdTr = document.createElement("td");
+    const t = trendMap.get(String(r.externalId)) ?? null;
+    const badge = renderTrendBadge(t);
+    if (badge instanceof Element) {
+      tdTr.appendChild(badge);
+    } else {
+      tdTr.textContent = badge ?? "—";
+    }
+
+    tr.appendChild(tdId);
+    tr.appendChild(tdAv);
+    tr.appendChild(tdTr);
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody);
+  return table;
+}
+
 
 // ====== Rollup (table) ======
 async function loadRollupForClass() {
   const rollClass = els.classSelect.value ? decodeURIComponent(els.classSelect.value) : "";
   const year = Number(els.yearSelect.value);
   const term = Number(els.termSelect.value);
-  if (!rollClass) { /* ... unchanged ... */ return; }
+  if (!rollClass) { return; }
 
   try {
     setMsg(els.tableMsg, "Loading…");
+    // Hide both while repopulating
     els.dataTable.style.display = "none";
+    els.compactGrid.style.display = "none";
     els.tbody.innerHTML = "";
     els.thead.innerHTML = "";
+    els.compactGrid.innerHTML = "";
 
     const encRC = encodeURIComponent(rollClass);
 
-// Fetch rollup (weeks + per-student week values) AND latest trends in parallel
+    // Fetch rollup (weeks + per-student week values) AND latest trends in parallel
     const [rollupResp, trendMap] = await Promise.all([
-    authedFetch(`/api/terms/${year}/${term}/classes/${encRC}/rollup`).then(r => r.json()),
-    fetchLatestTrends(rollClass).catch(() => new Map()),  // ← never let it throw
+      authedFetch(`/api/terms/${year}/${term}/classes/${encRC}/rollup`).then(r => r.json()),
+      fetchLatestTrends(rollClass).catch(() => new Map()),  // ← never let it throw
     ]);
-
 
     const weeks = Array.isArray(rollupResp.weeks) ? rollupResp.weeks.slice(0, 12) : [];
     const rows  = Array.isArray(rollupResp.rows)  ? rollupResp.rows : [];
+
     // Stable shuffle per day + class + term so students can't infer identities
-        const d = new Date();
-            const todayLocal = [
-            d.getFullYear(),
-            String(d.getMonth() + 1).padStart(2, "0"),
-            String(d.getDate()).padStart(2, "0"),
-            ].join("-"); // YYYY-MM-DD in local time
-            seededShuffleInPlace(rows, `${todayLocal}|${year}|${term}|${rollClass}`);
+    const d = new Date();
+    const todayLocal = [
+      d.getFullYear(),
+      String(d.getMonth() + 1).padStart(2, "0"),
+      String(d.getDate()).padStart(2, "0"),
+    ].join("-");
+    seededShuffleInPlace(rows, `${todayLocal}|${year}|${term}|${rollClass}`);
 
+    // ===== Build WIDE table (with weeks) =====
+    {
+      // Header: ID | Avatar | Trend | W1..WN
+      const trh = document.createElement("tr");
+      ["ID", "Avatar", "Trend", ...weeks.map(w => `W${w}`)].forEach((h, idx) => {
+        const th = document.createElement("th");
+        th.textContent = h;
+        if (idx >= 3) th.classList.add("weekcol");
+        trh.appendChild(th);
+      });
+      els.thead.appendChild(trh);
 
+      const frag = document.createDocumentFragment();
+      for (const r of rows) {
+        const tr = document.createElement("tr");
+        const tdId = document.createElement("td");
+        const tdAv = document.createElement("td");
+        const tdTr = document.createElement("td");
 
-    // Header: ID | Avatar | Trend | W1..WN
-    const trh = document.createElement("tr");
-    ["ID", "Avatar", "Trend", ...weeks.map(w => `W${w}`)].forEach((h, idx) => {
-      const th = document.createElement("th");
-      th.textContent = h;
-      if (idx >= 3) th.classList.add("weekcol");
-      trh.appendChild(th);
-    });
-    els.thead.appendChild(trh);
+        tdId.textContent = r.externalId ?? "";
+        tdAv.textContent = ""; // avatar later
 
-    // Body
-    const frag = document.createDocumentFragment();
-    for (const r of rows) {
-      const tr = document.createElement("tr");
-      const tdId = document.createElement("td");
-      const tdAv = document.createElement("td");
-      const tdTr = document.createElement("td");
+        const t = trendMap.get(String(r.externalId)) ?? null;
+        const badge = renderTrendBadge(t);
+        if (badge instanceof Element) tdTr.appendChild(badge); else tdTr.textContent = badge;
 
-      tdId.textContent = r.externalId ?? "";
-      tdAv.textContent = ""; // avatar later
+        tr.appendChild(tdId);
+        tr.appendChild(tdAv);
+        tr.appendChild(tdTr);
 
-      // ← inject trend badge from latest snapshot
-      const t = trendMap.get(String(r.externalId)) ?? null;
-      const badge = renderTrendBadge(t);
-      if (badge instanceof Element) tdTr.appendChild(badge); else tdTr.textContent = badge;
-
-      tr.appendChild(tdId);
-      tr.appendChild(tdAv);
-      tr.appendChild(tdTr);
-
-      for (const v of r.weekValues || []) {
-        const td = document.createElement("td");
-        td.classList.add("weekcol");
-        if (v === null || v === undefined || v === "") {
-          td.textContent = "";
-        } else {
-          const n = Number(v);
-          td.textContent = Number.isFinite(n) ? n.toFixed(1) : "";
+        for (const v of r.weekValues || []) {
+          const td = document.createElement("td");
+          td.classList.add("weekcol");
+          if (v === null || v === undefined || v === "") {
+            td.textContent = "";
+          } else {
+            const n = Number(v);
+            td.textContent = Number.isFinite(n) ? n.toFixed(1) : "";
+          }
+          tr.appendChild(td);
         }
-        tr.appendChild(td);
-      }
 
-      frag.appendChild(tr);
+        frag.appendChild(tr);
+      }
+      els.tbody.appendChild(frag);
     }
-    els.tbody.appendChild(frag);
+
+    // ===== Build COMPACT two-column view (ID | Avatar | Trend only) =====
+    {
+      // Split rows roughly in half for two columns
+      const mid = Math.ceil(rows.length / 2);
+      const left = rows.slice(0, mid);
+      const right = rows.slice(mid);
+
+      const leftTable = buildMiniTable(left, trendMap);
+      const rightTable = buildMiniTable(right, trendMap);
+
+      els.compactGrid.appendChild(leftTable);
+      els.compactGrid.appendChild(rightTable);
+    }
+
+    // Now toggle which layout is visible
     applyWeekVisibility();
 
-    els.dataTable.style.display = "table";
-    setMsg(els.tableMsg, `${rows.length} students • Weeks shown: ${weeks.join(", ")}`, "ok");
+    setMsg(
+      els.tableMsg,
+      `${rows.length} students • Weeks: ${weeks.join(", ") || "—"}`,
+      "ok"
+    );
   } catch (e) {
     setMsg(els.tableMsg, e.message || "Failed to load rollup", "error");
   }
 }
 
 
+
 function applyWeekVisibility() {
-  if (!els.dataTable) return;
+  if (!els.dataTable || !els.compactGrid) return;
+
+  // Toggle the week columns class on the wide table (still useful for accessibility)
   if (showWeeks) {
     els.dataTable.classList.remove("hide-weeks");
   } else {
     els.dataTable.classList.add("hide-weeks");
   }
+
+  // Show only one layout at a time
+  if (showWeeks) {
+    els.compactGrid.style.display = "none";
+    els.dataTable.style.display = "table";
+  } else {
+    els.dataTable.style.display = "none";
+    els.compactGrid.style.display = "grid";
+  }
+
   if (els.toggleWeeks) els.toggleWeeks.checked = showWeeks;
 }
+
 
 
 // ====== Events ======
