@@ -3,6 +3,13 @@ const BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com"; // your Ren
 const DEBUG = false;
 let showWeeks = false; // default: weeks hidden
 
+// --- Asset URL builder that works locally and on GitHub Pages ---
+function asset(path) {
+  // Use document.baseURI so <base href="./"> is respected
+  return new URL(path, document.baseURI).href;
+}
+
+
 
 // ====== UI refs ======
 const els = {
@@ -204,9 +211,9 @@ async function loadClassesForSelectedTerm() {
 function renderTrendBadge(status) {
   if (!status) return "—";
   const map = {
-    diamond: { src: "assets/trend/diamond.svg", alt: "Diamond (improved)" },
-    gold:    { src: "assets/trend/gold.svg",    alt: "Gold (maintained)" },
-    silver:  { src: "assets/trend/silver.svg",  alt: "Silver (lower)" },
+    diamond: { src: asset("assets/trend/diamond.svg"), alt: "Diamond (improved)" },
+    gold:    { src: asset("assets/trend/gold.svg"),    alt: "Gold (maintained)" },
+    silver:  { src: asset("assets/trend/silver.svg"),  alt: "Silver (lower)" },
   };
   const m = map[status];
   if (!m) return "—";
@@ -217,16 +224,17 @@ function renderTrendBadge(status) {
   span.setAttribute("aria-label", m.alt);
 
   const img = document.createElement("img");
-  img.src = m.src + "?v=1";      // cache bust with ?v=
+  img.src = m.src + "?v=1";  // ok to keep cache-busting
   img.alt = m.alt;
   img.loading = "lazy";
   img.decoding = "async";
-  img.width = 20;  // optional fixed dimensions
+  img.width = 20;
   img.height = 20;
 
   span.appendChild(img);
   return span;
 }
+
 
 
 // --- Fetch latest trends for a class (uses endpoint that includes `trend`) ---

@@ -182,6 +182,11 @@
 </fieldset>
 
     </section>
+    <script>
+        console.log("baseURI:", document.baseURI);
+        console.log("Expecting this to exist:", new URL("assets/trend/diamond.svg", document.baseURI).href);
+    </script>
+
 </body>
 
 </html>
