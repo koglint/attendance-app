@@ -136,74 +136,105 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
     }
     const label = `${year} Term ${term} Week ${week}`;
 
-    // Idempotency: checksum on raw bytes
-    const checksum = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
-    const uploadsColl = db.collection("schools").doc(SCHOOL_ID).collection("uploads");
+    // Checksums (info/diagnostics)
+    const contentChecksum = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
+    const compoundChecksum = crypto
+      .createHash("sha256")
+      .update(req.file.buffer)
+      .update("|")
+      .update(label)
+      .digest("hex");
 
-    // If we've processed this exact file before, return the prior result
-    const existing = await uploadsColl
-      .where("checksum", "==", checksum)
-      .where("status", "==", "processed")
-      .limit(1)
-      .get();
+    const schoolRef = db.collection("schools").doc(SCHOOL_ID);
+    const uploadsColl = schoolRef.collection("uploads");
+    const snapsColl = schoolRef.collection("snapshots");
 
-    if (!existing.empty) {
-      const doc = existing.docs[0];
-      const data = doc.data();
-      return res.json({
-        uploadId: doc.id,
-        snapshotId: data.snapshotId || null,
-        rowCount: data.rowCount || 0,
-        label: data.label || null,
-        deduplicated: true
-      });
-    }
-
-    // Parse CSV (columns = object keys)
+    // Parse CSV
     const text = req.file.buffer.toString("utf8");
     const records = parse(text, { columns: true, skip_empty_lines: true, bom: true });
-
     if (!records.length) return res.status(400).json({ error: "empty CSV" });
 
+    // Header detection
     const headers = Object.keys(records[0]);
     const hExternal = findHeader(headers, REQUIRED_HEADERS.externalId);
-    const hClass    = findHeader(headers, REQUIRED_HEADERS.rollClass);
-    const hPct      = findHeader(headers, REQUIRED_HEADERS.pctAttendance);
-
+    const hClass = findHeader(headers, REQUIRED_HEADERS.rollClass);
+    const hPct = findHeader(headers, REQUIRED_HEADERS.pctAttendance);
     if (!hExternal || !hClass || !hPct) {
       return res.status(400).json({
         error: "missing required columns",
-        required: ["External id","Rollclass name","Percentage Attendance"],
+        required: ["External id", "Rollclass name", "Percentage Attendance"],
         found: headers
       });
     }
 
-    // Create upload + snapshot docs
+    // Create upload record (status: processing)
     const uploadRef = uploadsColl.doc();
     await uploadRef.set({
       filename: req.file.originalname || "upload.csv",
-      checksum,
+      contentChecksum,
+      compoundChecksum,
       uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
       uploadedBy: req.user.uid,
       rowCount: records.length,
       status: "processing",
-        year,
-        term,
-        week,
-        label
+      year,
+      term,
+      week,
+      label
     });
 
-    const snapsColl = db.collection("schools").doc(SCHOOL_ID).collection("snapshots");
-    const snapshotRef = snapsColl.doc();
-    await snapshotRef.set({
-      uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
-      uploadId: uploadRef.id,
-      isLatest: false,
+    // Find existing snapshot by (year, term, week)
+    const existingSnapQS = await snapsColl
+      .where("year", "==", year)
+      .where("term", "==", term)
+      .where("week", "==", week)
+      .limit(1)
+      .get();
+
+    let snapshotRef;
+    let reusedExisting = false;
+
+    if (!existingSnapQS.empty) {
+      // OVERWRITE path: reuse the existing snapshot doc for this label
+      snapshotRef = existingSnapQS.docs[0].ref;
+      reusedExisting = true;
+
+      // Ensure snapshot doc carries current metadata (in case label changed casing etc.)
+      await snapshotRef.set(
+        {
+          uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
+          uploadId: uploadRef.id,
+          isLatest: false,
+          year,
+          term,
+          week,
+          label
+        },
+        { merge: true }
+      );
+
+      // Delete all existing rows under this snapshot
+      const rowsColl = snapshotRef.collection("rows");
+      while (true) {
+        const toDelete = await rowsColl.limit(500).get();
+        if (toDelete.empty) break;
+        const batch = db.batch();
+        toDelete.docs.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+    } else {
+      // NEW snapshot path
+      snapshotRef = snapsColl.doc();
+      await snapshotRef.set({
+        uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
+        uploadId: uploadRef.id,
+        isLatest: false,
         year,
         term,
         week,
         label
-    });
+      });
+    }
 
     // Write rows (≤500 per batch)
     const rowsColl = snapshotRef.collection("rows");
@@ -211,59 +242,73 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
     let inBatch = 0;
     let written = 0;
 
+    const clamp01 = (n) => Math.max(0, Math.min(100, n));
+
     for (const r of records) {
       const externalIdRaw = String(r[hExternal] ?? "").trim();
       const rollClass = String(r[hClass] ?? "").trim();
-
       if (!externalIdRaw || !rollClass) continue;
 
-      // Coerce % present → number (strip % and spaces)
       const rawPct = String(r[hPct] ?? "").replace("%", "").trim();
       const pct = Number(rawPct);
       if (!Number.isFinite(pct)) continue;
 
-      const docId = externalIdRaw.replace(/\//g, "_"); // avoid slashes in doc IDs
+      const docId = externalIdRaw.replace(/\//g, "_");
       const ref = rowsColl.doc(docId);
 
-      batch.set(ref, {
-        externalId: externalIdRaw,
-        rollClass,
-        pctAttendance: clamp01(pct)
-      }, { merge: false });
+      batch.set(
+        ref,
+        {
+          externalId: externalIdRaw,
+          rollClass,
+          pctAttendance: clamp01(pct)
+        },
+        { merge: false }
+      );
 
-      inBatch++; written++;
+      inBatch++;
+      written++;
       if (inBatch === 500) {
         await batch.commit();
         batch = db.batch();
         inBatch = 0;
       }
     }
-
     if (inBatch) await batch.commit();
 
-    // Flip "latest" pointer only after successful writes
-    const schoolRef = db.collection("schools").doc(SCHOOL_ID);
-    await schoolRef.set({ latestSnapshotId: snapshotRef.id }, { merge: true }); 
+    // Make this snapshot "latest" (global pointer)
+    await schoolRef.set({ latestSnapshotId: snapshotRef.id }, { merge: true });
 
-    // Mark snapshot & upload finalized
-    await snapshotRef.update({ isLatest: true });
-    await uploadRef.update({ status: "processed", snapshotId: snapshotRef.id, rowCount: written });
+    // Finalize
+    await snapshotRef.set({ isLatest: true }, { merge: true });
+    await uploadRef.update({
+      status: "processed",
+      snapshotId: snapshotRef.id,
+      rowCount: written,
+      reusedExisting
+    });
 
-    return res.json({ uploadId: uploadRef.id, snapshotId: snapshotRef.id, rowCount: written });
+    return res.json({
+      uploadId: uploadRef.id,
+      snapshotId: snapshotRef.id,
+      rowCount: written,
+      label,
+      reusedExisting
+    });
   } catch (err) {
     console.error("Upload failed:", err);
-    // Best-effort failure mark (ignore errors here)
     try {
       const uploads = db.collection("schools").doc(SCHOOL_ID).collection("uploads");
       if (req.file) {
         const checksum = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
-        const q = await uploads.where("checksum", "==", checksum).limit(1).get();
+        const q = await uploads.where("contentChecksum", "==", checksum).limit(1).get();
         if (!q.empty) await uploads.doc(q.docs[0].id).update({ status: "failed" });
       }
     } catch {}
     return res.status(500).json({ error: "upload failed" });
   }
 });
+
 
 
 
