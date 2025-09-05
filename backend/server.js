@@ -121,14 +121,32 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
     if (!admin || !db) return res.status(503).json({ error: "auth not initialised on server" });
     if (!req.file || !req.file.buffer) return res.status(400).json({ error: "missing file" });
 
+    // Year/Term/Week (from form fields sent by the admin page)
+    const year = Number(req.body?.year);
+    const term = Number(req.body?.term);
+    const week = Number(req.body?.week);
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      return res.status(400).json({ error: "invalid year" });
+    }
+    if (![1, 2, 3, 4].includes(term)) {
+      return res.status(400).json({ error: "invalid term (1–4)" });
+    }
+    if (!Number.isInteger(week) || week < 1 || week > 12) {
+      return res.status(400).json({ error: "invalid week (1–12)" });
+    }
+    const label = `${year} Term ${term} Week ${week}`;
+
     // Idempotency: checksum on raw bytes
     const checksum = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
     const uploadsColl = db.collection("schools").doc(SCHOOL_ID).collection("uploads");
 
     // If we've processed this exact file before, return the prior result
-    const existing = await uploadsColl.where("checksum", "==", checksum)
-                                      .where("status", "==", "processed")
-                                      .limit(1).get();
+    const existing = await uploadsColl
+      .where("checksum", "==", checksum)
+      .where("status", "==", "processed")
+      .limit(1)
+      .get();
+
     if (!existing.empty) {
       const doc = existing.docs[0];
       const data = doc.data();
@@ -136,6 +154,7 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
         uploadId: doc.id,
         snapshotId: data.snapshotId || null,
         rowCount: data.rowCount || 0,
+        label: data.label || null,
         deduplicated: true
       });
     }
@@ -254,17 +273,26 @@ app.get("/api/snapshots/latest/meta", requireAuth("teacher"), async (req, res) =
     const latestSnapshotId = schoolDoc.get("latestSnapshotId") || null;
     if (!latestSnapshotId) return res.json({ snapshotId: null, uploadedAt: null });
 
-    const snapDoc = await db.collection("schools").doc(SCHOOL_ID)
-      .collection("snapshots").doc(latestSnapshotId).get();
+    const snapDoc = await db
+      .collection("schools")
+      .doc(SCHOOL_ID)
+      .collection("snapshots")
+      .doc(latestSnapshotId)
+      .get();
 
     res.json({
       snapshotId: latestSnapshotId,
-      uploadedAt: snapDoc.exists ? snapDoc.get("uploadedAt") || null : null
+      uploadedAt: snapDoc.exists ? snapDoc.get("uploadedAt") || null : null,
+      year: snapDoc.get("year") ?? null,
+      term: snapDoc.get("term") ?? null,
+      week: snapDoc.get("week") ?? null,
+      label: snapDoc.get("label") ?? null
     });
   } catch (e) {
     res.status(500).json({ error: "failed to fetch latest snapshot meta" });
   }
 });
+
 
 // GET list of classes present in latest snapshot
 app.get("/api/snapshots/latest/classes", requireAuth("teacher"), async (req, res) => {

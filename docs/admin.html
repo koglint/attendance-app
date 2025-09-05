@@ -84,6 +84,42 @@
     <section id="onlyAuthed">
         <fieldset>
             <legend>Upload weekly CSV</legend>
+
+            <!-- inside <fieldset> for Upload weekly CSV, before the file input -->
+            <div style="display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap">
+                <label>Year<br />
+                    <select id="yearSelect"></select>
+                </label>
+            
+                <label>Term<br />
+                    <select id="termSelect">
+                        <option value="1">Term 1</option>
+                        <option value="2">Term 2</option>
+                        <option value="3">Term 3</option>
+                        <option value="4">Term 4</option>
+                    </select>
+                </label>
+            
+                <label>Week<br />
+                    <select id="weekSelect">
+                        <!-- 1–12 (adjust if your school uses different ranges) -->
+                        <option>1</option>
+                        <option>2</option>
+                        <option>3</option>
+                        <option>4</option>
+                        <option>5</option>
+                        <option>6</option>
+                        <option>7</option>
+                        <option>8</option>
+                        <option>9</option>
+                        <option>10</option>
+                        <option>11</option>
+                        <option>12</option>
+                    </select>
+                </label>
+            </div>
+
+            
             <p class="muted">Expected columns (case/spacing tolerant): <code class="mono">External id</code>, <code
                     class="mono">Rollclass name</code>, <code class="mono">Percentage present</code>.</p>
             <input id="csvFile" type="file" accept=".csv,text/csv" />

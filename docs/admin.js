@@ -22,7 +22,28 @@ const els = {
   checkClassesBtn: document.getElementById("checkClassesBtn"),
   checkMsg: document.getElementById("checkMsg"),
   checkOut: document.getElementById("checkOut"),
+
+  yearSelect: document.getElementById("yearSelect"),
+  termSelect: document.getElementById("termSelect"),
+  weekSelect: document.getElementById("weekSelect"),
+
+
 };
+
+// Populate Year: currentYear-1 .. currentYear+1
+(function initYearTermWeek() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const years = [y - 1, y, y + 1];
+  els.yearSelect.innerHTML = years.map(v => `<option value="${v}">${v}</option>`).join("");
+  els.yearSelect.value = String(y);
+
+  // Optional: auto-select term by month (AU school calendar assumption)
+  const month = now.getMonth() + 1;
+  const guessTerm = month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4;
+  els.termSelect.value = String(guessTerm);
+})();
+
 
 function setMsg(el, text, kind="info") {
   el.textContent = text || "";
@@ -97,6 +118,20 @@ els.uploadBtn.addEventListener("click", async () => {
     const fd = new FormData();
     fd.append("file", file, file.name);
 
+
+    // Add the snapshot labels
+    const year = Number(els.yearSelect.value);
+    const term = Number(els.termSelect.value);
+    const week = Number(els.weekSelect.value);
+    if (!Number.isInteger(year) || year < 2000 || year > 2100)
+      return setMsg(els.uploadMsg, "Please choose a valid Year", "error");
+    if (![1,2,3,4].includes(term))
+      return setMsg(els.uploadMsg, "Please choose a valid Term (1–4)", "error");
+    if (!Number.isInteger(week) || week < 1 || week > 12)
+      return setMsg(els.uploadMsg, "Please choose a valid Week (1–12)", "error");
+    fd.append("year", String(year));
+    fd.append("term", String(term));
+    fd.append("week", String(week));
     const resp = await fetch(`${BACKEND_BASE_URL}/api/uploads`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
