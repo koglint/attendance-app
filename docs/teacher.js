@@ -13,6 +13,8 @@ const els = {
   email: document.getElementById("email"),
   password: document.getElementById("password"),
   authMsg: document.getElementById("authMsg"),
+  authForm: document.getElementById("authForm"),           
+
 
   onlyAuthed: document.getElementById("onlyAuthed"),
   snapshotInfo: document.getElementById("snapshotInfo"),
@@ -78,15 +80,39 @@ firebaseAuth.onAuthStateChanged(async (user) => {
 });
 
 els.signOutBtn.addEventListener("click", () => firebaseAuth.signOut());
-els.signInBtn.addEventListener("click", async () => {
-  setMsg(els.authMsg, "Signing in...");
-  try {
-    await firebaseAuth.signInWithEmailAndPassword(els.email.value.trim(), els.password.value);
-    setMsg(els.authMsg, "Signed in", "ok");
-  } catch (e) {
-    setMsg(els.authMsg, e.message || "Sign-in failed", "error");
-  }
-});
+
+// Prefer the <form id="authForm"> submit, but fall back to the button if the form isn't present
+if (els.authForm) {
+  els.authForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    setMsg(els.authMsg, "Signing in...");
+    try {
+      await firebaseAuth.signInWithEmailAndPassword(
+        els.email.value.trim(),
+        els.password.value
+      );
+      setMsg(els.authMsg, "Signed in", "ok");
+    } catch (err) {
+      setMsg(els.authMsg, err.message || "Sign-in failed", "error");
+    }
+  });
+} else if (els.signInBtn) {
+  // legacy fallback if form not present
+  els.signInBtn.addEventListener("click", async () => {
+    setMsg(els.authMsg, "Signing in...");
+    try {
+      await firebaseAuth.signInWithEmailAndPassword(
+        els.email.value.trim(),
+        els.password.value
+      );
+      setMsg(els.authMsg, "Signed in", "ok");
+    } catch (e) {
+      setMsg(els.authMsg, e.message || "Sign-in failed", "error");
+    }
+  });
+}
+
+
 
 // ====== Networking ======
 async function authedFetch(path) {
@@ -99,6 +125,7 @@ async function authedFetch(path) {
   if (resp.status === 401) throw new Error("Not authorised (401)");
   return resp;
 }
+
 
 // ====== Term & class loading ======
 async function populateTerms() {
@@ -162,18 +189,84 @@ async function loadClassesForSelectedTerm() {
   }
 }
 
+// --- Trend badge (tiny UI helper) ---
+function renderTrendBadge(status) {
+  if (!status) return "—";
+  const map = {
+    diamond: { src: "../assets/trend/diamond.svg", alt: "Diamond (improved)" },
+    gold:    { src: "../assets/trend/gold.svg",    alt: "Gold (maintained)" },
+    silver:  { src: "../assets/trend/silver.svg",  alt: "Silver (lower)" },
+  };
+  const m = map[status];
+  if (!m) return "—";
+
+  const span = document.createElement("span");
+  span.className = `trend-badge trend-${status}`;
+  span.setAttribute("role", "img");
+  span.setAttribute("aria-label", m.alt);
+
+  const img = document.createElement("img");
+  img.src = m.src + "?v=1";      // cache bust with ?v=
+  img.alt = m.alt;
+  img.loading = "lazy";
+  img.decoding = "async";
+  img.width = 20;  // optional fixed dimensions
+  img.height = 20;
+
+  span.appendChild(img);
+  return span;
+}
+
+
+// --- Fetch latest trends for a class (uses endpoint that includes `trend`) ---
+async function fetchLatestTrends(rollClass) {
+  const encRC = encodeURIComponent(rollClass);
+  const resp = await authedFetch(`/api/snapshots/latest/classes/${encRC}/rows`);
+  const rows = await resp.json();
+  const byId = new Map();
+  rows.forEach(r => byId.set(String(r.externalId), r.trend ?? null));
+  return byId; // Map<externalId, 'diamond'|'gold'|'silver'|null>
+}
+
+
+// --- Seeded shuffle (stable order for a given day/class) ---
+function xmur3(str) {
+  let h = 1779033703 ^ str.length;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function() {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return (h ^= h >>> 16) >>> 0;
+  };
+}
+function mulberry32(a) {
+  return function() {
+    let t = (a += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function seededShuffleInPlace(a, seedStr) {
+  const seed = xmur3(seedStr)();
+  const rand = mulberry32(seed);
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+
 // ====== Rollup (table) ======
 async function loadRollupForClass() {
   const rollClass = els.classSelect.value ? decodeURIComponent(els.classSelect.value) : "";
   const year = Number(els.yearSelect.value);
   const term = Number(els.termSelect.value);
-  if (!rollClass) {
-    els.dataTable.style.display = "none";
-    els.tbody.innerHTML = "";
-    els.thead.innerHTML = "";
-    setMsg(els.tableMsg, "Choose a class to view.");
-    return;
-  }
+  if (!rollClass) { /* ... unchanged ... */ return; }
 
   try {
     setMsg(els.tableMsg, "Loading…");
@@ -182,24 +275,38 @@ async function loadRollupForClass() {
     els.thead.innerHTML = "";
 
     const encRC = encodeURIComponent(rollClass);
-    const data = await (await authedFetch(`/api/terms/${year}/${term}/classes/${encRC}/rollup`)).json();
-    if (DEBUG) console.log("[rollup]", data);
 
-    const weeks = Array.isArray(data.weeks) ? data.weeks.slice(0, 12) : [];
-    const rows = Array.isArray(data.rows) ? data.rows : [];
+// Fetch rollup (weeks + per-student week values) AND latest trends in parallel
+    const [rollupResp, trendMap] = await Promise.all([
+    authedFetch(`/api/terms/${year}/${term}/classes/${encRC}/rollup`).then(r => r.json()),
+    fetchLatestTrends(rollClass).catch(() => new Map()),  // ← never let it throw
+    ]);
 
-    // Build header: ID | Avatar | Trend | W1..WN
+
+    const weeks = Array.isArray(rollupResp.weeks) ? rollupResp.weeks.slice(0, 12) : [];
+    const rows  = Array.isArray(rollupResp.rows)  ? rollupResp.rows : [];
+    // Stable shuffle per day + class + term so students can't infer identities
+        const d = new Date();
+            const todayLocal = [
+            d.getFullYear(),
+            String(d.getMonth() + 1).padStart(2, "0"),
+            String(d.getDate()).padStart(2, "0"),
+            ].join("-"); // YYYY-MM-DD in local time
+            seededShuffleInPlace(rows, `${todayLocal}|${year}|${term}|${rollClass}`);
+
+
+
+    // Header: ID | Avatar | Trend | W1..WN
     const trh = document.createElement("tr");
     ["ID", "Avatar", "Trend", ...weeks.map(w => `W${w}`)].forEach((h, idx) => {
       const th = document.createElement("th");
       th.textContent = h;
-        if (idx >= 3) th.classList.add("weekcol"); // week columns start at index 3
-
+      if (idx >= 3) th.classList.add("weekcol");
       trh.appendChild(th);
     });
     els.thead.appendChild(trh);
 
-    // Rows
+    // Body
     const frag = document.createDocumentFragment();
     for (const r of rows) {
       const tr = document.createElement("tr");
@@ -208,38 +315,41 @@ async function loadRollupForClass() {
       const tdTr = document.createElement("td");
 
       tdId.textContent = r.externalId ?? "";
-      tdAv.textContent = ""; // placeholder for future avatar
-      tdTr.textContent = ""; // placeholder for future trend
+      tdAv.textContent = ""; // avatar later
+
+      // ← inject trend badge from latest snapshot
+      const t = trendMap.get(String(r.externalId)) ?? null;
+      const badge = renderTrendBadge(t);
+      if (badge instanceof Element) tdTr.appendChild(badge); else tdTr.textContent = badge;
 
       tr.appendChild(tdId);
       tr.appendChild(tdAv);
       tr.appendChild(tdTr);
 
-        for (const v of r.weekValues || []) {
+      for (const v of r.weekValues || []) {
         const td = document.createElement("td");
-        td.classList.add("weekcol"); // mark as a weekly column
+        td.classList.add("weekcol");
         if (v === null || v === undefined || v === "") {
-            td.textContent = "";
+          td.textContent = "";
         } else {
-            const n = Number(v);
-            td.textContent = Number.isFinite(n) ? n.toFixed(1) : "";
+          const n = Number(v);
+          td.textContent = Number.isFinite(n) ? n.toFixed(1) : "";
         }
         tr.appendChild(td);
-        }
-
+      }
 
       frag.appendChild(tr);
     }
     els.tbody.appendChild(frag);
-    applyWeekVisibility(); // ← hides or shows weekly columns
+    applyWeekVisibility();
 
     els.dataTable.style.display = "table";
-
     setMsg(els.tableMsg, `${rows.length} students • Weeks shown: ${weeks.join(", ")}`, "ok");
   } catch (e) {
     setMsg(els.tableMsg, e.message || "Failed to load rollup", "error");
   }
 }
+
 
 function applyWeekVisibility() {
   if (!els.dataTable) return;
@@ -265,8 +375,11 @@ els.classSelect.addEventListener("change", () => {
   loadRollupForClass();
 });
 
-els.toggleWeeks.addEventListener("change", () => {
-  showWeeks = !!els.toggleWeeks.checked;
-  applyWeekVisibility();
-});
+if (els.toggleWeeks) {
+  els.toggleWeeks.addEventListener("change", () => {
+    showWeeks = !!els.toggleWeeks.checked;
+    applyWeekVisibility();
+  });
+}
+
 
