@@ -49,6 +49,33 @@ try {
   console.warn("Firebase Admin not fully initialised:", e.message);
 }
 
+// --- Firestore error mapping helper (put near the top, before routes) ---
+function sendFirestoreError(res, e, fallbackMessage) {
+  // Firestore/GRPC often signals quota/rate issues via code 8 (RESOURCE_EXHAUSTED)
+  // or with 'quota'/'resource_exhausted' in the message/details.
+  const code = e?.code;
+  const text = (e?.details || e?.message || "").toLowerCase();
+  const isQuota =
+    code === 8 ||
+    /quota|resource[_\s-]?exhausted/.test(text);
+
+  if (isQuota) {
+    // Make it explicit to the frontend
+    return res.status(429).json({ error: "quota exceeded" });
+  }
+
+  // Optionally treat transient 'UNAVAILABLE' (14) as 503
+  const isUnavailable = code === 14 || /unavailable|timeout/.test(text);
+  if (isUnavailable) {
+    return res.status(503).json({ error: "service unavailable" });
+  }
+
+  console.error(fallbackMessage, e);
+  return res.status(500).json({ error: fallbackMessage });
+}
+
+
+
 // --- Auth middleware (Email/Password tokens) ---
 // ✅ outer returns a function; inner can be async
 function requireAuth(requiredRole) {
@@ -76,8 +103,12 @@ function requireAuth(requiredRole) {
       }
       req.user = { uid, role };
       next();
-    } catch {
-      return res.status(500).json({ error: "role lookup failed" });
+    } catch (err) {
+      console.error("Role lookup failed:", err);
+      return res.status(503).json({
+        error: "role lookup failed",
+        detail: err?.message || String(err),
+      });
     }
   };
 }
@@ -252,6 +283,7 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
 
       // Delete all existing rows under this snapshot
       const rowsColl = snapshotRef.collection("rows");
+      const classSet = new Set();  // ← collect all rollClass values for this snapshot
       while (true) {
         const toDelete = await rowsColl.limit(500).get();
         if (toDelete.empty) break;
@@ -298,6 +330,7 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
       const externalIdRaw = String(r[hExternal] ?? "").trim();
       const rollClass = String(r[hClass] ?? "").trim();
       if (!externalIdRaw || !rollClass) continue;
+      classSet.add(rollClass);
 
       const rawPct = String(r[hPct] ?? "").replace("%", "").trim();
       const pct = Number(rawPct);
@@ -345,7 +378,14 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
     await schoolRef.set({ latestSnapshotId: snapshotRef.id }, { merge: true });
 
     // Finalize
-    await snapshotRef.set({ isLatest: true }, { merge: true });
+    await snapshotRef.set(
+      {
+        isLatest: true,
+        classList: Array.from(classSet).sort(), // ← snapshot-level class list
+      },
+      { merge: true }
+    );
+
     await uploadRef.update({
       status: "processed",
       snapshotId: snapshotRef.id,
@@ -492,20 +532,21 @@ app.get("/api/terms", requireAuth("teacher"), async (req, res) => {
     terms.sort((a, b) => (b.year - a.year) || (b.term - a.term));
     res.json(terms);
   } catch (e) {
-    console.error("terms list failed:", e);
-    res.status(500).json({ error: "failed to list terms" });
+    return sendFirestoreError(res, e, "failed to list terms");
   }
 });
 
 // List roll classes for a specific year/term (union across that term's snapshots)
+// List roll classes for a specific year/term using ONE snapshot (low read cost)
 app.get("/api/terms/:year/:term/classes", requireAuth("teacher"), async (req, res) => {
   try {
     const year = Number(req.params.year);
     const term = Number(req.params.term);
-    if (!Number.isInteger(year) || ![1,2,3,4].includes(term)) {
+    if (!Number.isInteger(year) || ![1, 2, 3, 4].includes(term)) {
       return res.status(400).json({ error: "invalid year/term" });
     }
 
+    // Get all snapshots for the term, then pick the most recent week
     const snapsQS = await db
       .collection("schools").doc(SCHOOL_ID)
       .collection("snapshots")
@@ -513,21 +554,41 @@ app.get("/api/terms/:year/:term/classes", requireAuth("teacher"), async (req, re
       .where("term", "==", term)
       .get();
 
-    const classes = new Set();
-    for (const snap of snapsQS.docs) {
-      const rowsSnap = await snap.ref.collection("rows").select("rollClass").get();
-      rowsSnap.forEach(r => {
-        const rc = r.get("rollClass");
-        if (rc) classes.add(rc);
-      });
+    let latestDoc = null, bestWeek = -Infinity;
+    snapsQS.forEach(d => {
+      const w = d.get("week");
+      if (Number.isInteger(w) && w > bestWeek) { bestWeek = w; latestDoc = d; }
+    });
+
+    if (!latestDoc) return res.json([]);
+
+    // Fast path: use snapshot-level classList if present
+    const existing = latestDoc.get("classList");
+    if (Array.isArray(existing) && existing.length) {
+      return res.json(existing.slice().sort().map(rollClass => ({ rollClass })));
     }
 
-    res.json(Array.from(classes).sort().map(rollClass => ({ rollClass })));
+    // Slow path (first run / older snapshots): scan rows in THIS ONE snapshot, then seed classList
+    const rowsSnap = await latestDoc.ref.collection("rows").select("rollClass").get();
+    const set = new Set();
+    rowsSnap.forEach(r => { const rc = r.get("rollClass"); if (rc) set.add(rc); });
+    const classes = Array.from(set).sort();
+
+    // Seed classList for future fast reads
+    await latestDoc.ref.set({ classList: classes }, { merge: true });
+
+    return res.json(classes.map(rollClass => ({ rollClass })));
   } catch (e) {
     console.error("term classes failed:", e);
-    res.status(500).json({ error: "failed to list term classes" });
+    // Map Firestore quota errors to 429 to make the client message clearer
+    const msg = (e && (e.details || e.message || "")).toLowerCase();
+    if (e?.code === 8 || msg.includes("quota")) {
+      return res.status(429).json({ error: "quota exceeded" });
+    }
+    return res.status(500).json({ error: "failed to list term classes" });
   }
 });
+
 
 // For a given year/term + class, return a rollup table across weeks (max 12)
 // For a given year/term + class, return a rollup table across weeks (max 12)

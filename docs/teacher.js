@@ -115,16 +115,27 @@ if (els.authForm) {
 
 
 // ====== Networking ======
-async function authedFetch(path) {
+async function authedFetch(path, init = {}) {
   const user = firebaseAuth.currentUser;
   if (!user) throw new Error("Not signed in");
   const token = await user.getIdToken();
-  const url = `${BACKEND_BASE_URL}${path}`;
-  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (DEBUG) console.log("[fetch]", path, "→", resp.status);
-  if (resp.status === 401) throw new Error("Not authorised (401)");
+
+  const resp = await fetch(`${BACKEND_BASE_URL}${path}`, {
+    ...init,
+    headers: { Authorization: `Bearer ${token}`, ...(init.headers || {}) },
+  });
+
+  if (!resp.ok) {
+    let detail = "";
+    try { const j = await resp.json(); detail = j?.error || JSON.stringify(j); }
+    catch { try { detail = await resp.text(); } catch {} }
+    const err = new Error(`${resp.status} ${resp.statusText}${detail ? ` — ${detail}` : ""}`);
+    err.status = resp.status;
+    throw err;
+  }
   return resp;
 }
+
 
 
 // ====== Term & class loading ======
