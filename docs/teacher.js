@@ -204,9 +204,9 @@ async function loadClassesForSelectedTerm() {
 function renderTrendBadge(status) {
   if (!status) return "—";
   const map = {
-    diamond: { src: "../assets/trend/diamond.svg", alt: "Diamond (improved)" },
-    gold:    { src: "../assets/trend/gold.svg",    alt: "Gold (maintained)" },
-    silver:  { src: "../assets/trend/silver.svg",  alt: "Silver (lower)" },
+    diamond: { src: "assets/trend/diamond.svg", alt: "Diamond (improved)" },
+    gold:    { src: "assets/trend/gold.svg",    alt: "Gold (maintained)" },
+    silver:  { src: "assets/trend/silver.svg",  alt: "Silver (lower)" },
   };
   const m = map[status];
   if (!m) return "—";

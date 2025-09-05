@@ -262,6 +262,10 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
     let snapshotRef;
     let reusedExisting = false;
 
+    // Collect rollClass values for this snapshot across both code paths
+    const classSet = new Set();
+
+
     if (!existingSnapQS.empty) {
       // OVERWRITE path: reuse the existing snapshot doc for this label
       snapshotRef = existingSnapQS.docs[0].ref;
@@ -283,7 +287,6 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
 
       // Delete all existing rows under this snapshot
       const rowsColl = snapshotRef.collection("rows");
-      const classSet = new Set();  // ← collect all rollClass values for this snapshot
       while (true) {
         const toDelete = await rowsColl.limit(500).get();
         if (toDelete.empty) break;
