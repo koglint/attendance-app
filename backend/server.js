@@ -115,6 +115,43 @@ function findHeader(headers, candidates) {
 }
 const clamp01 = n => Math.max(0, Math.min(100, n));
 
+// --- Trend helpers ---
+const TREND = Object.freeze({
+  DIAMOND: "diamond", // improved
+  GOLD: "gold",       // maintained
+  SILVER: "silver",   // lower
+});
+const TREND_EPSILON = 0.1; // tolerance (percentage points)
+
+/** Compare two 0–100 percentages and return a TREND or null if not computable. */
+function compareTrend(curr, prev, eps = TREND_EPSILON) {
+  if (Number.isFinite(curr) && Number.isFinite(prev)) {
+    if (curr - prev > eps) return TREND.DIAMOND;
+    if (prev - curr > eps) return TREND.SILVER;
+    return TREND.GOLD;
+  }
+  return null;
+}
+
+/** Find the snapshot doc for the most recent week < current within the same Year/Term. */
+async function findPreviousSnapshotRef(db, schoolRef, year, term, week) {
+  const snapsQS = await schoolRef.collection("snapshots")
+    .where("year", "==", year)
+    .where("term", "==", term)
+    .get();
+
+  let best = null, bestWeek = -Infinity;
+  snapsQS.forEach(d => {
+    const w = d.get("week");
+    if (Number.isInteger(w) && w < week && w > bestWeek) {
+      bestWeek = w;
+      best = d.ref;
+    }
+  });
+  return best; // null if none
+}
+
+
 // Admin upload: accepts CSV and writes a new snapshot
 app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req, res) => {
   try {
@@ -236,13 +273,26 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
       });
     }
 
-    // Write rows (≤500 per batch)
+    // Build a map of previous week %s keyed by externalId (same Year/Term, latest week < current)
+    const prevRef = await findPreviousSnapshotRef(db, schoolRef, year, term, week);
+    const prevPctById = new Map();
+    if (prevRef) {
+    const prevSnap = await prevRef.collection("rows").select("externalId", "pctAttendance").get();
+    prevSnap.forEach(d => {
+        const id = d.get("externalId");
+        const pct = d.get("pctAttendance");
+        if (id && typeof pct === "number") prevPctById.set(String(id), pct);
+    });
+    }
+
+    // Now write rows for the current snapshot, computing trend vs previous
     const rowsColl = snapshotRef.collection("rows");
     let batch = db.batch();
     let inBatch = 0;
     let written = 0;
 
     const clamp01 = (n) => Math.max(0, Math.min(100, n));
+
 
     for (const r of records) {
       const externalIdRaw = String(r[hExternal] ?? "").trim();
@@ -256,15 +306,30 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
       const docId = externalIdRaw.replace(/\//g, "_");
       const ref = rowsColl.doc(docId);
 
-      batch.set(
+        const curr = clamp01(pct);
+        const prev = prevPctById.get(externalIdRaw);
+        const status = compareTrend(curr, prev);
+
+        batch.set(
         ref,
         {
-          externalId: externalIdRaw,
-          rollClass,
-          pctAttendance: clamp01(pct)
+            externalId: externalIdRaw,
+            rollClass,
+            pctAttendance: curr,
+            trend: status ?? null,
+            trendMeta: status ? {
+            year,
+            term,
+            week,
+            prev: Number.isFinite(prev) ? prev : null,
+            curr,
+            epsilon: TREND_EPSILON,
+            version: "v1",
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            } : admin.firestore.FieldValue.delete(), // no trendMeta if not computable
         },
         { merge: false }
-      );
+        );
 
       inBatch++;
       written++;
@@ -385,9 +450,11 @@ app.get("/api/snapshots/latest/classes/:rollClass/rows", requireAuth("teacher"),
 
     const qs = await rowsRef.where("rollClass", "==", rollClass).get();
     const data = qs.docs.map(d => ({
-      externalId: d.get("externalId"),
-      pctAttendance: d.get("pctAttendance")
+    externalId: d.get("externalId"),
+    pctAttendance: d.get("pctAttendance"),
+    trend: d.get("trend") ?? null
     }));
+
     res.json(data);
   } catch (e) {
     res.status(500).json({ error: "failed to fetch class rows" });
