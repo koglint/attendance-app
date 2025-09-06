@@ -145,6 +145,96 @@ function findHeader(headers, candidates) {
 }
 const clamp01 = n => Math.max(0, Math.min(100, n));
 
+// here comes the change
+
+// === ADD: find the latest and second-latest snapshot in a term ===
+async function getTopTwoSnapshotRefs(schoolRef, year, term) {
+  const snapsQS = await schoolRef.collection("snapshots")
+    .where("year", "==", year)
+    .where("term", "==", term)
+    .get();
+
+  // Gather {week, ref}, sort ascending by week
+  const items = [];
+  snapsQS.forEach(d => {
+    const w = d.get("week");
+    if (Number.isInteger(w)) items.push({ week: w, ref: d.ref });
+  });
+  items.sort((a,b) => a.week - b.week);
+
+  if (items.length === 0) return { latest: null, prev: null };
+  const latest = items[items.length - 1] || null;
+  const prev   = items.length >= 2 ? items[items.length - 2] : null;
+  return { latest, prev };
+}
+
+// === ADD: recompute trend for the latest week vs the previous week for a term ===
+async function recomputeLatestTrendForTerm(db, schoolRef, year, term) {
+  const { latest, prev } = await getTopTwoSnapshotRefs(schoolRef, year, term);
+  if (!latest) return { latestSnapshotId: null, compared: null };
+
+  // Build prev-week map (externalId -> pct)
+  const prevPctById = new Map();
+  if (prev) {
+    const prevSnap = await prev.ref.collection("rows")
+      .select("externalId", "pctAttendance")
+      .get();
+    prevSnap.forEach(d => {
+      const id = d.get("externalId");
+      const pct = d.get("pctAttendance");
+      if (id && typeof pct === "number") prevPctById.set(String(id), pct);
+    });
+  }
+
+  // Read latest rows, then write trend fields based on prevWeek
+  const latestRowsQS = await latest.ref.collection("rows")
+    .select("externalId", "pctAttendance", "rollClass")
+    .get();
+
+  let batch = db.batch();
+  let inBatch = 0;
+  latestRowsQS.forEach(doc => {
+    const id   = doc.get("externalId");
+    const curr = doc.get("pctAttendance");
+    const prevPct = prevPctById.get(String(id));
+    const status = compareTrend(curr, prevPct);
+
+    const ref = doc.ref;
+    const data = {
+      trend: status ?? null,
+      // if no trend, remove meta; otherwise set it
+      ...(status ? {
+        trendMeta: {
+          year,
+          term,
+          week: latest.week,
+          prevWeek: prev ? prev.week : null,
+          prev: Number.isFinite(prevPct) ? prevPct : null,
+          curr: Number.isFinite(curr) ? curr : null,
+          epsilon: TREND_EPSILON,
+          version: "v2",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }
+      } : { trendMeta: admin.firestore.FieldValue.delete?.() || null })
+    };
+
+    batch.set(ref, data, { merge: true });
+    inBatch++;
+    if (inBatch >= 500) {
+      batch.commit();
+      batch = db.batch();
+      inBatch = 0;
+    }
+  });
+  if (inBatch) await batch.commit();
+
+  // Return which weeks were compared and latest snapshot id
+  return {
+    latestSnapshotId: latest.ref.id,
+    compared: prev ? { fromWeek: prev.week, toWeek: latest.week } : null
+  };
+}
+
 // --- Trend helpers ---
 const TREND = Object.freeze({
   DIAMOND: "diamond", // improved
@@ -307,17 +397,7 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
       });
     }
 
-    // Build a map of previous week %s keyed by externalId (same Year/Term, latest week < current)
-    const prevRef = await findPreviousSnapshotRef(db, schoolRef, year, term, week);
-    const prevPctById = new Map();
-    if (prevRef) {
-    const prevSnap = await prevRef.collection("rows").select("externalId", "pctAttendance").get();
-    prevSnap.forEach(d => {
-        const id = d.get("externalId");
-        const pct = d.get("pctAttendance");
-        if (id && typeof pct === "number") prevPctById.set(String(id), pct);
-    });
-    }
+
 
     // Now write rows for the current snapshot, computing trend vs previous
     const rowsColl = snapshotRef.collection("rows");
@@ -338,32 +418,15 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
       const docId = externalIdRaw.replace(/\//g, "_");
       const ref = rowsColl.doc(docId);
 
+       // REPLACE per-row payload with this minimal write:
         const curr = clamp01(pct);
-        const prev = prevPctById.get(externalIdRaw);
-        const status = compareTrend(curr, prev);
-
-        // Build row payload without using FieldValue.delete()
         const rowData = {
-        externalId: externalIdRaw,
-        rollClass,
-        pctAttendance: curr,
-        trend: status ?? null,
+          externalId: externalIdRaw,
+          rollClass,
+          pctAttendance: curr
         };
-
-        if (status) {
-        rowData.trendMeta = {
-            year,
-            term,
-            week,
-            prev: Number.isFinite(prev) ? prev : null,
-            curr,
-            epsilon: TREND_EPSILON,
-            version: "v1",
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        };
-        }
-
         batch.set(ref, rowData, { merge: false });
+
 
 
       inBatch++;
@@ -376,8 +439,10 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
     }
     if (inBatch) await batch.commit();
 
-    // Make this snapshot "latest" (global pointer)
-    await schoolRef.set({ latestSnapshotId: snapshotRef.id }, { merge: true });
+// REPLACE with: recompute term's latest-vs-previous trends and set pointer to true latest
+const { latestSnapshotId, compared } = await recomputeLatestTrendForTerm(db, schoolRef, year, term);
+await schoolRef.set({ latestSnapshotId: latestSnapshotId || snapshotRef.id }, { merge: true });
+
 
     // Finalize
     await snapshotRef.set(
@@ -611,7 +676,8 @@ app.get("/api/snapshots/latest/classes/:rollClass/rows", requireAuth("teacher"),
     const data = qs.docs.map(d => ({
     externalId: d.get("externalId"),
     pctAttendance: d.get("pctAttendance"),
-    trend: d.get("trend") ?? null
+    trend: d.get("trend") ?? null,
+    trendMeta: d.get("trendMeta") ?? null, // ← ADD
     }));
 
     res.json(data);

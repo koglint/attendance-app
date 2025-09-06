@@ -247,10 +247,19 @@ async function fetchLatestTrends(rollClass) {
   const encRC = encodeURIComponent(rollClass);
   const resp = await authedFetch(`/api/snapshots/latest/classes/${encRC}/rows`);
   const rows = await resp.json();
+
+  // Expect the server endpoint to include trendMeta; if not present we still work.
   const byId = new Map();
-  rows.forEach(r => byId.set(String(r.externalId), r.trend ?? null));
-  return byId; // Map<externalId, 'diamond'|'gold'|'silver'|null>
+  rows.forEach(r => {
+    byId.set(String(r.externalId), {
+      trend: r.trend ?? null,
+      meta: r.trendMeta ?? null, // { prevWeek, week, ... } if server exposed it
+    });
+  });
+
+  return byId; // Map<externalId, {trend, meta}>
 }
+
 
 
 // --- Seeded shuffle (stable order for a given day/class) ---
@@ -309,13 +318,21 @@ function buildMiniTable(rowsSubset, trendMap) {
     //tdAv.textContent = ""; // reserved for avatars later
 
     const tdTr = document.createElement("td");
-    const t = trendMap.get(String(r.externalId)) ?? null;
-    const badge = renderTrendBadge(t);
-    if (badge instanceof Element) {
-      tdTr.appendChild(badge);
-    } else {
-      tdTr.textContent = badge ?? "—";
-    }
+
+   const info = trendMap.get(String(r.externalId)) || null;
+const t = info?.trend ?? (typeof info === "string" ? info : null); // backward compatible
+const badge = renderTrendBadge(t);
+if (badge instanceof Element) {
+  const meta = info?.meta;
+  if (meta && Number.isInteger(meta.prevWeek) && Number.isInteger(meta.week)) {
+    badge.title = `Trend from Week ${meta.prevWeek} to Week ${meta.week}`;
+    badge.setAttribute("data-trend-range", `W${meta.prevWeek}-W${meta.week}`);
+  }
+  tdTr.appendChild(badge);
+} else {
+  tdTr.textContent = badge ?? "—";
+}
+
 
     tr.appendChild(tdId);
     //tr.appendChild(tdAv);
@@ -355,6 +372,36 @@ async function loadRollupForClass() {
     const weeks = Array.isArray(rollupResp.weeks) ? rollupResp.weeks.slice(0, 12) : [];
     const rows  = Array.isArray(rollupResp.rows)  ? rollupResp.rows : [];
 
+    // Determine which weeks are being compared for trend display
+let trendFrom = null, trendTo = null;
+
+// Try to get it from any student's trend meta (preferred, exact)
+for (const r of rows) {
+  const info = trendMap.get(String(r.externalId));
+  const meta = info?.meta;
+  if (meta && Number.isInteger(meta.prevWeek) && Number.isInteger(meta.week)) {
+    trendFrom = meta.prevWeek;
+    trendTo   = meta.week;
+    break;
+  }
+}
+
+// Fallback: if no meta, use the last two term weeks available
+if (trendFrom == null || trendTo == null) {
+  const sortedWeeks = [...weeks].sort((a,b) => a - b);
+  if (sortedWeeks.length >= 2) {
+    trendFrom = sortedWeeks[sortedWeeks.length - 2];
+    trendTo   = sortedWeeks[sortedWeeks.length - 1];
+  }
+}
+
+// Put a caption on the big table
+const caption = els.dataTable.querySelector("caption") || els.dataTable.createCaption();
+caption.textContent = (trendFrom != null && trendTo != null)
+  ? `Attendance trend from Week ${trendFrom} to Week ${trendTo}`
+  : `Attendance trend: (weeks unavailable)`;
+
+
     // Stable shuffle per day + class + term so students can't infer identities
     const d = new Date();
     const todayLocal = [
@@ -371,7 +418,7 @@ async function loadRollupForClass() {
       ["ID", "Trend", ...weeks.map(w => `W${w}`)].forEach((h, idx) => {
         const th = document.createElement("th");
         th.textContent = h;
-        if (idx >= 3) th.classList.add("weekcol");
+        if (idx >= 2) th.classList.add("weekcol");
         trh.appendChild(th);
       });
       els.thead.appendChild(trh);
@@ -385,10 +432,24 @@ async function loadRollupForClass() {
 
         tdId.textContent = r.externalId ?? "";
         //tdAv.textContent = ""; // avatar later
-
-        const t = trendMap.get(String(r.externalId)) ?? null;
+                
+        const info = trendMap.get(String(r.externalId)) || null;
+        const t = info?.trend ?? (typeof info === "string" ? info : null); // backward compatible
         const badge = renderTrendBadge(t);
-        if (badge instanceof Element) tdTr.appendChild(badge); else tdTr.textContent = badge;
+
+        if (badge instanceof Element) {
+          const meta = info?.meta;
+          const fromW = (meta && Number.isInteger(meta.prevWeek)) ? meta.prevWeek : trendFrom;
+          const toW   = (meta && Number.isInteger(meta.week))     ? meta.week     : trendTo;
+          if (fromW != null && toW != null) {
+            badge.title = `Trend from Week ${fromW} to Week ${toW}`;
+            badge.setAttribute("data-trend-range", `W${fromW}-W${toW}`);
+          }
+          tdTr.appendChild(badge);
+        } else {
+          tdTr.textContent = badge;
+        }
+
 
         tr.appendChild(tdId);
        // tr.appendChild(tdAv);

@@ -238,8 +238,8 @@ async function handleHttpError(res, fallback) {
   try { detail = (await res.json())?.error || ""; } catch {}
   const code = res.status;
   if (code === 401) errorText.textContent = "Your session expired. Please sign in again.";
-  else if (code === 403) errorText.textContent = detail || "You don’t have access. If you’re a student, ask your teacher to add your account.";
-  else if (code === 404) errorText.textContent = detail || "We couldn’t find your record. Ask your teacher to confirm your email and student ID.";
+  else if (code === 403) errorText.textContent = detail || "You don't have access. If you're a student, ask your teacher to add your account.";
+  else if (code === 404) errorText.textContent = detail || "We couldn't find your record. Ask your teacher to confirm your email and student ID.";
   else if (code === 429) errorText.textContent = "Too many requests right now. Please try again shortly.";
   else if (code === 503) errorText.textContent = "Service temporarily unavailable. Please try again.";
   else errorText.textContent = detail || fallback || "Something went wrong.";
