@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>My Attendance</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        :root {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+        }
+
+        body {
+            margin: 0;
+            background: #0b0d12;
+            color: #e9eef7;
+        }
+
+        .container {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 24px 16px;
+        }
+
+        .card {
+            background: #121622;
+            border: 1px solid #23293a;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .row>* {
+            flex: 1 1 auto;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #1a2132;
+            border: 1px solid #2a3248;
+            font-size: 12px;
+            color: #b9c6d8;
+        }
+
+        .btn {
+            cursor: pointer;
+            border-radius: 10px;
+            border: 1px solid #32405c;
+            background: #182035;
+            color: #e9eef7;
+            padding: 10px 14px;
+        }
+
+        .btn:disabled {
+            opacity: .6;
+            cursor: not-allowed;
+        }
+
+        .muted {
+            color: #9fb0c5;
+        }
+
+        .error {
+            color: #ff6b7a;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 8px 10px;
+            border-bottom: 1px solid #233049;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .right {
+            text-align: right;
+        }
+
+        .big {
+            font-size: 36px;
+            font-weight: 700;
+            letter-spacing: .3px;
+        }
+
+        .small {
+            font-size: 12px;
+        }
+    </style>
+
+    <!-- Configure your backend base URL here (same you used in admin/teacher pages) -->
+    <script>
+        window.BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com";
+        window.FIREBASE_CONFIG = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            appId: "YOUR_APP_ID"
+            // (the public web config — safe to embed)
+        };
+    </script>
+</head>
+
+<body>
+    <div class="container">
+        <header class="row card" style="align-items:flex-start;">
+            <div>
+                <h1 style="margin:0 0 8px;">My Attendance</h1>
+                <div class="muted small">View your own attendance only. Your identity is verified using your school
+                    login.</div>
+            </div>
+            <div>
+                <button id="signInBtn" class="btn">Sign in with Google</button>
+                <button id="signOutBtn" class="btn hidden">Sign out</button>
+            </div>
+        </header>
+
+        <!-- Signed-out notice -->
+        <section id="signedOut" class="card">
+            <p>To view your attendance, please sign in with your school Google account.</p>
+            <p class="muted small">We’ll only access your email to look up your student record and show your data.</p>
+        </section>
+
+        <!-- Loading state -->
+        <section id="loading" class="card hidden">
+            <p>Checking your profile…</p>
+        </section>
+
+        <!-- Error state -->
+        <section id="errorBox" class="card hidden">
+            <p id="errorText" class="error"></p>
+            <button id="retryBtn" class="btn">Retry</button>
+        </section>
+
+        <!-- Summary header -->
+        <section id="summary" class="card hidden">
+            <div class="row">
+                <div>
+                    <div id="studentName" class="big">—</div>
+                    <div id="rollClass" class="pill">Roll: —</div>
+                </div>
+                <div class="right">
+                    <div class="small muted" id="termLabel">—</div>
+                    <div class="big" id="termPercent">—</div>
+                    <div class="small muted">This term</div>
+                </div>
+                <div class="right">
+                    <div class="small muted">Year to date</div>
+                    <div class="big" id="ytdPercent">—</div>
+                </div>
+                <div class="right">
+                    <div class="small muted">Trend</div>
+                    <div id="trendBadge" class="pill">—</div>
+                    <div class="small muted" id="updatedAt">Updated —</div>
+                </div>
+            </div>
+            <div style="margin-top:12px;">
+                <button id="toggleWeeksBtn" class="btn">Show weekly detail</button>
+            </div>
+        </section>
+
+        <!-- Weekly detail -->
+        <section id="weeks" class="card hidden">
+            <div class="row" style="justify-content:space-between;">
+                <div><strong id="weeksTitle">Weekly detail</strong></div>
+                <div class="small muted" id="versionTag"></div>
+            </div>
+            <div style="overflow:auto;">
+                <table id="weeksTable">
+                    <thead>
+                        <tr>
+                            <th>Week</th>
+                            <th>Week start</th>
+                            <th class="right">% present</th>
+                            <th class="right">Absences</th>
+                            <th class="right">Lates</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <!-- student.js is an ES module -->
+    <script type="module" src="./student.js"></script>
+</body>
+
+</html>

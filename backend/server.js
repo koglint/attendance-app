@@ -1,5 +1,4 @@
 const express = require("express");
-const cors = require("cors");
 const multer = require("multer");
 const { parse } = require("csv-parse/sync");
 const crypto = require("crypto");
@@ -427,6 +426,123 @@ app.get("/healthz", (req, res) => {
 
 // --- Teacher endpoints (read-only): latest meta, classes, class rows ---
 
+// Add near other routes:
+
+app.get("/api/whoami", requireAuth(), (req, res) => {
+  res.json({ uid: req.user.uid, role: req.user.role });
+});
+
+// Student: summary from latest snapshot (live-computed; one read of school doc + one row doc)
+app.get("/api/me/summary", requireAuth("student"), async (req, res) => {
+  try {
+    res.set("Cache-Control", "no-store");
+    const schoolRef = db.collection("schools").doc(SCHOOL_ID);
+    const userRef = schoolRef.collection("users").doc(req.user.uid);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) return res.status(404).json({ error: "no user profile" });
+
+    const profile = userDoc.data() || {};
+    const externalId = profile.externalId;
+    if (!externalId) return res.status(404).json({ error: "no student id on profile" });
+
+    const schoolDoc = await schoolRef.get();
+    const latestSnapshotId = schoolDoc.get("latestSnapshotId");
+    if (!latestSnapshotId) return res.status(404).json({ error: "no snapshot yet" });
+
+    const snapRef = schoolRef.collection("snapshots").doc(latestSnapshotId);
+    const snapDoc = await snapRef.get();
+    const year = snapDoc.get("year") ?? null;
+    const term = snapDoc.get("term") ?? null;
+    const week = snapDoc.get("week") ?? null;
+    const label = snapDoc.get("label") ?? null;
+
+    const rowRef = snapRef.collection("rows").doc(String(externalId).replace(/\//g,"_"));
+    const rowDoc = await rowRef.get();
+
+    const pct = rowDoc.exists ? rowDoc.get("pctAttendance") : null;
+    const trend = rowDoc.exists ? (rowDoc.get("trend") ?? null) : null;
+
+    const uploadedAt = snapDoc.get("uploadedAt");
+    const updatedAtIso = uploadedAt?.toDate ? uploadedAt.toDate().toISOString() : null;
+
+    // Optionally compute YTD/term % later; for now mirror latest week (%)
+    return res.json({
+      studentId: externalId,
+      firstName: profile.firstName ?? null,
+      surname: profile.surname ?? null,
+      rollClass: profile.rollClass ?? (rowDoc.get("rollClass") ?? null),
+      term: year && term ? `${year}-T${term}` : label,
+      ytdPercent: pct,        // can compute across terms later
+      termPercent: pct,
+      trend,
+      version: `live-${latestSnapshotId}`,
+      updatedAt: updatedAtIso
+    });
+  } catch (e) {
+    return sendFirestoreError(res, e, "failed to load student summary");
+  }
+});
+
+// Student: weekly detail across the current term (scan the term’s snapshots for this externalId)
+app.get("/api/me/term", requireAuth("student"), async (req, res) => {
+  try {
+    res.set("Cache-Control", "no-store");
+    const schoolRef = db.collection("schools").doc(SCHOOL_ID);
+    const userDoc = await schoolRef.collection("users").doc(req.user.uid).get();
+    if (!userDoc.exists) return res.status(404).json({ error: "no user profile" });
+    const externalId = userDoc.get("externalId");
+    if (!externalId) return res.status(404).json({ error: "no student id on profile" });
+
+    // Determine which term: explicit ?term=YYYY-Tn or latest
+    let termParam = String(req.query.term || "").trim();
+    let year = null, term = null;
+    if (termParam && /^20\d{2}-T[1-4]$/.test(termParam)) {
+      const parts = termParam.split("-T");
+      year = Number(parts[0]); term = Number(parts[1]);
+    } else {
+      const schoolDoc = await schoolRef.get();
+      const latestSnapshotId = schoolDoc.get("latestSnapshotId");
+      if (!latestSnapshotId) return res.status(404).json({ error: "no snapshot yet" });
+      const snapDoc = await schoolRef.collection("snapshots").doc(latestSnapshotId).get();
+      year = snapDoc.get("year") ?? null;
+      term = snapDoc.get("term") ?? null;
+      termParam = year && term ? `${year}-T${term}` : (snapDoc.get("label") ?? "current term");
+    }
+
+    // Fetch all snapshots in this term (max ~12 weeks)
+    const snapsQS = await schoolRef.collection("snapshots")
+      .where("year", "==", year)
+      .where("term", "==", term)
+      .get();
+
+    // For each snapshot (week), read this student’s row (doc id = externalId)
+    const weeks = {};
+    for (const d of snapsQS.docs) {
+      const w = d.get("week");
+      if (!Number.isInteger(w)) continue;
+      const rowRef = d.ref.collection("rows").doc(String(externalId).replace(/\//g,"_"));
+      const rowDoc = await rowRef.get();
+      if (rowDoc.exists) {
+        weeks[`W${String(w).padStart(2,"0")}`] = {
+          weekStart: null, // you can seed week start dates in snapshot if you want
+          percent: rowDoc.get("pctAttendance") ?? null,
+          absences: null,
+          lates: null
+        };
+      }
+    }
+
+    return res.json({
+      term: termParam,
+      version: `live-term-${year}-T${term}`,
+      weeks
+    });
+  } catch (e) {
+    return sendFirestoreError(res, e, "failed to load weekly data");
+  }
+});
+
+
 // GET latest snapshot meta
 app.get("/api/snapshots/latest/meta", requireAuth("teacher"), async (req, res) => {
   try {
@@ -659,6 +775,139 @@ app.get("/api/terms/:year/:term/classes/:rollClass/rollup", requireAuth("teacher
   }
 });
 
+// --- Roster upload (admin): email ↔ studentId seeding for student sign-in ---
+const ROSTER_HEADERS = {
+  studentId: ["Student ID","StudentId","External id","ExternalId","ID","Sentral ID","SentralID"],
+  email: ["Email","Email Address","E-mail","EmailAddress"],
+  surname: ["Surname","Last Name","LastName","Family Name","FamilyName"],
+  givenNames: ["Given Names","Given Name","First Name","FirstName","GivenNames","FirstNames"],
+  rollClass: [
+    "Roll Class","RollClass","Roll class name","Rollclass name","Roll group","RollGroup",
+    "Class","Homegroup","Rollclass"
+  ],
+};
+
+app.post("/api/roster/upload", requireAuth("admin"), upload.single("file"), async (req, res) => {
+  try {
+    if (!admin || !db) return res.status(503).json({ error: "auth not initialised on server" });
+    if (!req.file || !req.file.buffer) return res.status(400).json({ error: "missing file" });
+
+    // Parse CSV
+    const text = req.file.buffer.toString("utf8");
+    const rows = parse(text, { columns: true, skip_empty_lines: true, bom: true });
+    if (!rows.length) return res.status(400).json({ error: "empty CSV" });
+
+    // Header detection
+    const headers = Object.keys(rows[0]);
+    const hId   = findHeader(headers, ROSTER_HEADERS.studentId);
+    const hMail = findHeader(headers, ROSTER_HEADERS.email);
+    const hSur  = findHeader(headers, ROSTER_HEADERS.surname);
+    const hGiven= findHeader(headers, ROSTER_HEADERS.givenNames);
+    const hRC   = findHeader(headers, ROSTER_HEADERS.rollClass);
+    if (!hId || !hMail || !hSur || !hGiven || !hRC) {
+      return res.status(400).json({
+        error: "missing required columns",
+        required: ["Student ID","Email","Surname","Given Names","Roll Class"],
+        found: headers
+      });
+    }
+
+    const schoolRef = db.collection("schools").doc(SCHOOL_ID);
+    const rosterColl = schoolRef.collection("roster");
+    const lookupColl = schoolRef.collection("email_lookup");
+
+    // Detect duplicate/malformed inputs in-memory first
+    const seenEmailToId = new Map();
+    const warnings = { duplicateEmails: [], missingId: 0, missingEmail: 0 };
+
+    // Prepare batched writes
+    let batch = db.batch();
+    let inBatch = 0, writtenRoster = 0, writtenLookup = 0;
+
+    function commitIfNeeded(force=false) {
+      if (inBatch >= 500 || force) {
+        const b = batch; // capture
+        batch = db.batch();
+        inBatch = 0;
+        return b.commit();
+      }
+      return Promise.resolve();
+    }
+
+    for (const r of rows) {
+      const studentIdRaw = String(r[hId] ?? "").trim();
+      const emailRaw = String(r[hMail] ?? "").trim();
+      const surname = String(r[hSur] ?? "").trim();
+      const given = String(r[hGiven] ?? "").trim();
+      const rollClass = String(r[hRC] ?? "").trim();
+
+      if (!studentIdRaw) { warnings.missingId++; continue; }
+      if (!emailRaw)     { warnings.missingEmail++; continue; }
+
+      // Some rows have multiple emails; split on , ; whitespace
+      const emails = emailRaw.split(/[,\s;]+/).map(e => e.toLowerCase()).filter(Boolean);
+      const docId = studentIdRaw.replace(/\//g, "_");
+
+      // Upsert roster doc (merge emails)
+      const rosterRef = rosterColl.doc(docId);
+      batch.set(rosterRef, {
+        surname,
+        givenNames: given,
+        rollClass,
+        emails,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      writtenRoster++; inBatch++;
+
+      // Build email_lookup documents
+      for (const em of emails) {
+        const prev = seenEmailToId.get(em);
+        if (prev && prev !== docId) {
+          warnings.duplicateEmails.push({ email: em, firstId: prev, secondId: docId });
+          // continue; // keep first mapping, skip conflicting second
+          // (Alternatively: overwrite last-writer-wins; keeping first is safer)
+          continue;
+        }
+        seenEmailToId.set(em, docId);
+
+        const lookRef = lookupColl.doc(em);
+        batch.set(lookRef, {
+          studentId: docId,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        writtenLookup++; inBatch++;
+      }
+
+      if (inBatch >= 500) await commitIfNeeded();
+    }
+    await commitIfNeeded(true);
+
+    // Log a minimal upload record (optional)
+    await schoolRef.collection("roster_uploads").add({
+      filename: req.file.originalname || "roster.csv",
+      uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
+      uploadedBy: req.user.uid,
+      rowCount: rows.length,
+      writtenRoster,
+      writtenLookup,
+      warnings,
+    });
+
+    // If there are hard conflicts, surface them but still 200 OK (admin can resolve)
+    return res.json({
+      ok: true,
+      rowCount: rows.length,
+      writtenRoster,
+      writtenLookup,
+      warnings,
+      note: (warnings.duplicateEmails.length
+        ? "Some emails map to multiple student IDs; these were skipped on the second occurrence."
+        : "All rows processed.")
+    });
+  } catch (e) {
+    return sendFirestoreError(res, e, "roster upload failed");
+  }
+});
 
 
 app.listen(PORT, () => {

@@ -234,8 +234,8 @@ function renderTrendBadge(status) {
   img.alt = m.alt;
   img.loading = "lazy";
   img.decoding = "async";
-  img.width = 20;
-  img.height = 20;
+  //img.width = 20;
+  //img.height = 20;
 
   span.appendChild(img);
   return span;
@@ -291,7 +291,7 @@ function buildMiniTable(rowsSubset, trendMap) {
 
   const thead = document.createElement("thead");
   const trh = document.createElement("tr");
-  ["ID", "Avatar", "Trend"].forEach(h => {
+  ["ID", "Trend"].forEach(h => {
     const th = document.createElement("th");
     th.textContent = h;
     trh.appendChild(th);
@@ -306,8 +306,8 @@ function buildMiniTable(rowsSubset, trendMap) {
     const tdId = document.createElement("td");
     tdId.textContent = r.externalId ?? "";
 
-    const tdAv = document.createElement("td");
-    tdAv.textContent = ""; // reserved for avatars later
+    //const tdAv = document.createElement("td");
+    //tdAv.textContent = ""; // reserved for avatars later
 
     const tdTr = document.createElement("td");
     const t = trendMap.get(String(r.externalId)) ?? null;
@@ -319,7 +319,7 @@ function buildMiniTable(rowsSubset, trendMap) {
     }
 
     tr.appendChild(tdId);
-    tr.appendChild(tdAv);
+    //tr.appendChild(tdAv);
     tr.appendChild(tdTr);
     tbody.appendChild(tr);
   });
@@ -369,7 +369,7 @@ async function loadRollupForClass() {
     {
       // Header: ID | Avatar | Trend | W1..WN
       const trh = document.createElement("tr");
-      ["ID", "Avatar", "Trend", ...weeks.map(w => `W${w}`)].forEach((h, idx) => {
+      ["ID", "Trend", ...weeks.map(w => `W${w}`)].forEach((h, idx) => {
         const th = document.createElement("th");
         th.textContent = h;
         if (idx >= 3) th.classList.add("weekcol");
@@ -381,18 +381,18 @@ async function loadRollupForClass() {
       for (const r of rows) {
         const tr = document.createElement("tr");
         const tdId = document.createElement("td");
-        const tdAv = document.createElement("td");
+        //const tdAv = document.createElement("td");
         const tdTr = document.createElement("td");
 
         tdId.textContent = r.externalId ?? "";
-        tdAv.textContent = ""; // avatar later
+        //tdAv.textContent = ""; // avatar later
 
         const t = trendMap.get(String(r.externalId)) ?? null;
         const badge = renderTrendBadge(t);
         if (badge instanceof Element) tdTr.appendChild(badge); else tdTr.textContent = badge;
 
         tr.appendChild(tdId);
-        tr.appendChild(tdAv);
+       // tr.appendChild(tdAv);
         tr.appendChild(tdTr);
 
         for (const v of r.weekValues || []) {
@@ -412,17 +412,21 @@ async function loadRollupForClass() {
       els.tbody.appendChild(frag);
     }
 
-    // ===== Build COMPACT two-column view (ID | Avatar | Trend only) =====
+    // ===== Build COMPACT view (ID | Avatar | Trend only) =====
     {
       // Split rows roughly in half for two columns
-      const mid = Math.ceil(rows.length / 2);
-      const left = rows.slice(0, mid);
-      const right = rows.slice(mid);
+      const oneThird = Math.ceil(rows.length / 3 * 1);
+      const twoThirds = Math.ceil(rows.length / 3 * 2);
+      const left = rows.slice(0, oneThird);
+      const middle = rows.slice(oneThird, twoThirds);
+      const right = rows.slice(twoThirds);
 
       const leftTable = buildMiniTable(left, trendMap);
+      const middleTable = buildMiniTable(middle, trendMap);
       const rightTable = buildMiniTable(right, trendMap);
 
       els.compactGrid.appendChild(leftTable);
+      els.compactGrid.appendChild(middleTable);
       els.compactGrid.appendChild(rightTable);
     }
 

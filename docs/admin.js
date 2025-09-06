@@ -27,6 +27,10 @@ const els = {
   termSelect: document.getElementById("termSelect"),
   weekSelect: document.getElementById("weekSelect"),
 
+  rosterFile: document.getElementById("rosterFile"),
+  uploadRosterBtn: document.getElementById("uploadRosterBtn"),
+  rosterUploadMsg: document.getElementById("rosterUploadMsg"),
+
 
 };
 
@@ -43,6 +47,8 @@ const els = {
   const guessTerm = month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4;
   els.termSelect.value = String(guessTerm);
 })();
+
+
 
 
 function setMsg(el, text, kind="info") {
@@ -70,24 +76,57 @@ function showSignedOutUI() {
   els.uploadResult.textContent = "";
 }
 
+els.uploadRosterBtn?.addEventListener("click", async () => {
+  if (!els.rosterFile.files.length) {
+    els.rosterUploadMsg.textContent = "Please choose a CSV file.";
+    return;
+  }
+  if (!confirm("This will upsert the roster and email lookup. Continue?")) return;
+
+  const user = firebaseAuth.currentUser;
+  if (!user) { els.rosterUploadMsg.textContent = "Sign in first"; return; }
+
+  els.rosterUploadMsg.textContent = "Uploading…";
+
+  try {
+    const token = await user.getIdToken();
+    const fd = new FormData();
+    fd.append("file", els.rosterFile.files[0]);
+
+    const res = await fetch(`${BACKEND_BASE_URL}/api/roster/upload`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}` },
+      body: fd,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+
+    els.rosterUploadMsg.textContent =
+      `Done: ${data.writtenRoster} students, ${data.writtenLookup} emails. ` +
+      `${data.warnings?.duplicateEmails?.length || 0} duplicate emails.`;
+  } catch (e) {
+    els.rosterUploadMsg.textContent = `Failed: ${e.message || e}`;
+  }
+});
+
+
 // ====== Auth listeners ======
 firebaseAuth.onAuthStateChanged(async (user) => {
   if (!user) return showSignedOutUI();
   showAuthedUI(user);
 
-  // Optional: probe an admin-only endpoint to toggle "onlyAdmin" UI.
+  // ✅ Show admin panel only for admins
   try {
     const token = await user.getIdToken();
-    const r = await fetch(`${BACKEND_BASE_URL}/api/snapshots/latest/meta`, {
+    const r = await fetch(`${BACKEND_BASE_URL}/api/whoami`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (r.status === 403) {
-      // teacher or viewer account
-      els.onlyAdmin.style.display = "none";
-    } else if (r.ok) {
-      els.onlyAdmin.style.display = "block"; // meta is teacher-accessible; you can keep this visible for admin checks
-    }
-  } catch {}
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const me = await r.json().catch(() => ({}));
+    els.onlyAdmin.style.display = (me.role === "admin") ? "block" : "none";
+  } catch {
+    els.onlyAdmin.style.display = "none";
+  }
 });
 
 els.signOutBtn.addEventListener("click", () => firebaseAuth.signOut());
@@ -132,6 +171,29 @@ els.uploadBtn.addEventListener("click", async () => {
     fd.append("year", String(year));
     fd.append("term", String(term));
     fd.append("week", String(week));
+
+
+    // ... after you've validated year/term/week and appended them to FormData
+
+// >>> ADD THIS CONFIRMATION POPUP <<<
+const proceed = window.confirm(
+  `Are you sure you want to upload this CSV?\n\n` +
+  `• File: ${file.name}\n` +
+  `• Year: ${year}\n` +
+  `• Term: ${term}\n` +
+  `• Week: ${week}\n\n` +
+  `This will create a new snapshot and may overwrite existing data for these labels.`
+);
+if (!proceed) {
+  setMsg(els.uploadMsg, "Upload cancelled.");
+  return; // stop here if they clicked "Cancel"
+}
+// <<< END CONFIRMATION >>>
+
+
+
+
+
     const resp = await fetch(`${BACKEND_BASE_URL}/api/uploads`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
