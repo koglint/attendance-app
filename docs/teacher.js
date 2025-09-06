@@ -3,11 +3,7 @@ const BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com"; // your Ren
 const DEBUG = false;
 let showWeeks = false; // default: weeks hidden
 
-// --- Asset URL builder that works locally and on GitHub Pages ---
-function asset(path) {
-  // Use document.baseURI so <base href="./"> is respected
-  return new URL(path, document.baseURI).href;
-}
+
 
 
 
@@ -215,14 +211,15 @@ async function loadClassesForSelectedTerm() {
 
 // --- Trend badge (tiny UI helper) ---
 function renderTrendBadge(status) {
-  if (!status) return "—";
+  if (!status) return " ¯_(ツ)_/¯";
+
   const map = {
-    diamond: { src: asset("assets/trend/diamond.svg"), alt: "Diamond (improved)" },
-    gold:    { src: asset("assets/trend/gold.svg"),    alt: "Gold (maintained)" },
-    silver:  { src: asset("assets/trend/silver.svg"),  alt: "Silver (lower)" },
+    diamond: { src: "https://koglint.github.io/attendance-app/assets/trend/diamond.svg", alt: "Diamond (improved)" },
+    gold:    { src: "https://koglint.github.io/attendance-app/assets/trend/gold.svg",    alt: "Gold (maintained)" },
+    silver:  { src: "https://koglint.github.io/attendance-app/assets/trend/silver.svg",  alt: "Silver (lower)" },
   };
   const m = map[status];
-  if (!m) return "—";
+  if (!m) return "?";
 
   const span = document.createElement("span");
   span.className = `trend-badge trend-${status}`;
@@ -230,16 +227,18 @@ function renderTrendBadge(status) {
   span.setAttribute("aria-label", m.alt);
 
   const img = document.createElement("img");
-  img.src = m.src + "?v=1";  // ok to keep cache-busting
   img.alt = m.alt;
   img.loading = "lazy";
   img.decoding = "async";
-  //img.width = 20;
-  //img.height = 20;
+  img.src = m.src;                    // ← the missing line
+  img.onerror = () => { span.textContent = m.alt; };  // graceful fallback
 
   span.appendChild(img);
   return span;
 }
+
+
+
 
 
 
