@@ -318,6 +318,8 @@ function buildMiniTable(rowsSubset, trendMap) {
     //tdAv.textContent = ""; // reserved for avatars later
 
     const tdTr = document.createElement("td");
+    tdTr.classList.add("trend-cell");   // ← add this line
+
 
    const info = trendMap.get(String(r.externalId)) || null;
 const t = info?.trend ?? (typeof info === "string" ? info : null); // backward compatible
@@ -429,6 +431,8 @@ caption.textContent = (trendFrom != null && trendTo != null)
         const tdId = document.createElement("td");
         //const tdAv = document.createElement("td");
         const tdTr = document.createElement("td");
+        tdTr.classList.add("trend-cell");   // ← add this line
+
 
         tdId.textContent = r.externalId ?? "";
         //tdAv.textContent = ""; // avatar later
