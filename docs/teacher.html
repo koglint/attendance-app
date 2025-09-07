@@ -144,12 +144,19 @@
 
     </style>
 
-    <!-- Firebase compat (same as admin page) -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth-compat.js"></script>
+<!-- keep these two compat SDKs first -->
+<script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth-compat.js"></script>
 
-    <script src="./firebase-init.js" defer></script>
-    <script src="./teacher.js" defer></script>
+<!-- your init (fetches config & initializes) -->
+<script src="./firebase-init.js" defer></script>
+
+<!-- make teacher.js a module so we can top-level await -->
+<script type="module" src="./teacher.js"></script>
+
+<!-- reCAPTCHA (unchanged) -->
+<script src="https://www.google.com/recaptcha/enterprise.js?render=6Lfl_MArAAAAAK4ZApN30QqbjPZdjIefvZ8vjmI3"></script>
+
 
 
     <style>

@@ -1,3 +1,7 @@
+// teacher.js (first line)
+await (window.firebaseReady || Promise.resolve());
+
+
 // ==== CONFIG ====
 const BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com";
 const DEBUG = false;
