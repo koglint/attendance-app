@@ -13,6 +13,10 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .map(s => s.trim())
   .filter(Boolean);
 
+
+
+
+  
 const app = express();
 
 // Basic JSON parsing (not needed for file uploads yet)
@@ -31,6 +35,33 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
+
+
+// --- Public: Firebase config (served from env) ---
+app.get("/public/firebase-config", (req, res) => {
+  if (!process.env.FB_API_KEY) {
+    return res.status(500).json({ error: "FB_API_KEY is not set on the server" });
+  }
+
+  // Prefer env values if you set them; fall back to known constants
+  const cfg = {
+    apiKey: process.env.FB_API_KEY, // <-- from env (never in Git)
+    authDomain: process.env.FB_AUTH_DOMAIN || "attendance-app-820b0.firebaseapp.com",
+    projectId: process.env.FB_PROJECT_ID || "attendance-app-820b0",
+    storageBucket: process.env.FB_STORAGE_BUCKET || "attendance-app-820b0.appspot.com",
+    messagingSenderId: process.env.FB_MESSAGING_SENDER_ID || "195821555404",
+    appId: process.env.FB_APP_ID || "1:195821555404:web:2c2009a38bf42a88f53c69",
+  };
+
+  // Cache briefly; adjust as you like
+  res.set({
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "private, max-age=300",
+  });
+  res.send(JSON.stringify(cfg));
+});
+
+  
 
 // --- Firebase Admin init (safe even if credentials not set yet) ---
 let admin, db;
