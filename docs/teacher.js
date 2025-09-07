@@ -1,6 +1,6 @@
 // ==== CONFIG ====
 const BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com";
-const DEBUG = false;
+const DEBUG = true;
 let showWeeks = false;
 
 // --- DIAGNOSTIC PROBES (top of teacher.js) ---
@@ -137,6 +137,9 @@ if (window.firebaseAuth) {
 if (els.authForm) {
 els.authForm.addEventListener("submit", async (e) => {
   e.preventDefault();
+      grecaptcha.enterprise.ready(async () => {
+      const token = await grecaptcha.enterprise.execute('6Lfl_MArAAAAAK4ZApN30QqbjPZdjIefvZ8vjmI3', {action: 'LOGIN'});
+    });
   setMsg(els.authMsg, "Signing in...");
 
   const email = els.email.value.trim();
