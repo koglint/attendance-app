@@ -3,10 +3,7 @@
 // Fetches Firebase Web config from your backend (served from Step 4).
 
 (function () {
-  const PROD = location.hostname.endsWith("github.io");
-  const API_BASE = PROD
-    ? "https://attendance-app-lfwc.onrender.com"
-    : "http://localhost:3000";
+  const API_BASE = "https://attendance-app-lfwc.onrender.com";
 
   async function loadConfig() {
     const res = await fetch(`${API_BASE}/public/firebase-config`, {

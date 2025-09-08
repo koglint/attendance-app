@@ -1,48 +1,10 @@
-// teacher.js (first line)
-await (window.firebaseReady || Promise.resolve());
+
 
 
 // ==== CONFIG ====
 const BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com";
-const DEBUG = false;
 let showWeeks = false;
 
-// --- DIAGNOSTIC PROBES (top of teacher.js) ---
-(function diagBoot() {
-  console.log("[diag] origin:", location.origin, "pathname:", location.pathname);
-  console.log("[diag] typeof firebase:", typeof firebase);
-  try {
-    console.log("[diag] firebase SDK_VERSION:", firebase && firebase.SDK_VERSION);
-    console.log("[diag] firebase.apps:", firebase && firebase.apps);
-  } catch (e) { console.log("[diag] firebase read error:", e); }
-
-  console.log("[diag] window.firebaseConfig:", window.firebaseConfig);
-  try {
-    const app = (firebase && firebase.apps && firebase.apps[0]) || null;
-    console.log("[diag] app initialized:", !!app, app && app.options);
-  } catch (e) { console.log("[diag] app.options error:", e); }
-
-  console.log("[diag] typeof window.firebaseAuth:", typeof window.firebaseAuth);
-  try {
-    console.log("[diag] currentUser (pre):", window.firebaseAuth && window.firebaseAuth.currentUser);
-  } catch (e) { console.log("[diag] auth read error:", e); }
-})();
-
-// One-shot raw REST test (call from submit handler when DEBUG=true)
-async function diagRawAuth(email, password) {
-  const key = (window.firebaseConfig && window.firebaseConfig.apiKey) || "(missing)";
-  const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(key)}`;
-  console.log("[diag] Hitting:", url, "from origin:", location.origin);
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, returnSecureToken: true })
-  });
-  let json = {};
-  try { json = await res.json(); } catch {}
-  console.log("[diag] raw response status:", res.status, json);
-  return { status: res.status, json };
-}
 
 
 
@@ -115,80 +77,81 @@ function formatUploadedAt(uploadedAt) {
   return String(uploadedAt);
 }
 
-if (!window.firebase || !window.firebase.apps || window.firebase.apps.length === 0) {
-  console.error("[auth] Firebase not initialized. Check script order and firebase-init.js.");
-}
-if (typeof window.firebaseAuth === "undefined") {
-  console.error("[auth] window.firebaseAuth is undefined. Did firebase-init.js set window.firebaseAuth?");
-}
 
 
 
-// ====== Auth listeners ======
-if (window.firebaseAuth) {
-  firebaseAuth.onAuthStateChanged(async (user) => {
-    if (!user) return showSignedOutUI();
-    showAuthedUI(user);
-    await populateTerms();
-  });
-  els.signOutBtn.addEventListener("click", () => firebaseAuth.signOut());
-} else {
-  setMsg(els.authMsg, "Auth not initialized — check console", "error");
-}
-
-
-// Prefer the <form id="authForm"> submit, but fall back to the button if the form isn't present
-if (els.authForm) {
-els.authForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  setMsg(els.authMsg, "Signing in...");
-
-  const email = els.email.value.trim();
-  const password = els.password.value;
-
+(async function boot() {
   try {
-    if (DEBUG) {
-      await diagRawAuth(email, password);
-    }
-    await firebaseAuth.signInWithEmailAndPassword(email, password);
-    setMsg(els.authMsg, "Signed in", "ok");
-  } catch (err) {
-    console.error("[auth] signIn error:", {
-      code: err && err.code,
-      message: err && err.message,
-      full: err
+    // 1) Wait for Firebase to be ready
+    const ready = await (window.firebaseReady || Promise.reject(new Error("firebaseReady missing")));
+    const auth = ready.auth || window.firebaseAuth; // both for safety
+
+    // 2) Now wire auth listeners
+    auth.onAuthStateChanged(async (user) => {
+      if (!user) return showSignedOutUI();
+      showAuthedUI(user);
+      await populateTerms();
     });
-    setMsg(els.authMsg, `${err.code || ""} ${err.message || "Sign-in failed"}`, "error");
+
+    els.signOutBtn.addEventListener("click", () => auth.signOut());
+
+    // 3) Wire sign-in ONLY after auth exists
+    if (els.authForm) {
+      els.authForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        setMsg(els.authMsg, "Signing in...");
+        try {
+          const email = els.email.value.trim();
+          const password = els.password.value;
+          await auth.signInWithEmailAndPassword(email, password);
+          setMsg(els.authMsg, "Signed in", "ok");
+        } catch (err) {
+          console.error("[auth] signIn error:", { code: err?.code, message: err?.message, full: err });
+          setMsg(els.authMsg, `${err?.code || ""} ${err?.message || "Sign-in failed"}`, "error");
+        }
+      });
+    } else if (els.signInBtn) {
+      els.signInBtn.addEventListener("click", async () => {
+        setMsg(els.authMsg, "Signing in...");
+        try {
+          await auth.signInWithEmailAndPassword(els.email.value.trim(), els.password.value);
+          setMsg(els.authMsg, "Signed in", "ok");
+        } catch (err) {
+          console.error("[auth] signIn error:", { code: err?.code, message: err?.message, full: err });
+          setMsg(els.authMsg, `${err?.code || ""} ${err?.message || "Sign-in failed"}`, "error");
+        }
+      });
+    }
+
+    // 4) Non-auth UI events are safe to wire now too
+    els.refreshBtn.addEventListener("click", populateTerms);
+    els.loadTermBtn.addEventListener("click", loadClassesForSelectedTerm);
+    els.classSelect.addEventListener("change", loadRollupForClass);
+    if (els.toggleWeeks) {
+      els.toggleWeeks.addEventListener("change", () => {
+        showWeeks = !!els.toggleWeeks.checked;
+        applyWeekVisibility();
+      });
+    }
+  } catch (e) {
+    console.error("[boot] init failed:", e);
+    setMsg(els.authMsg, "Auth not initialized — check console", "error");
   }
-});
+})();
 
-} else if (els.signInBtn) {
-  // legacy fallback if form not present
-  els.signInBtn.addEventListener("click", async () => {
-    setMsg(els.authMsg, "Signing in...");
-    try {
-      await firebaseAuth.signInWithEmailAndPassword(
-        els.email.value.trim(),
-        els.password.value
-      );
-      setMsg(els.authMsg, "Signed in", "ok");
-} catch (err) {
-  console.error("[auth] signIn error:", {
-    code: err && err.code,
-    message: err && err.message,
-    full: err
-  });
-  setMsg(els.authMsg, `${err.code || ""} ${err.message || "Sign-in failed"}`, "error");
-}
 
-  });
-}
+
+
+
+
 
 
 
 // ====== Networking ======
 async function authedFetch(path, init = {}) {
-  const user = firebaseAuth.currentUser;
+  const ready = await (window.firebaseReady || Promise.reject(new Error("firebaseReady missing")));
+  const auth = ready.auth || window.firebaseAuth;
+  const user = auth.currentUser;
   if (!user) throw new Error("Not signed in");
   const token = await user.getIdToken();
 
@@ -210,12 +173,12 @@ async function authedFetch(path, init = {}) {
 
 
 
+
 // ====== Term & class loading ======
 async function populateTerms() {
   try {
     setMsg(els.snapshotInfo, "Loading terms…");
     const terms = await (await authedFetch("/api/terms")).json();
-    if (DEBUG) console.log("[terms]", terms);
 
     if (!Array.isArray(terms) || terms.length === 0) {
       setMsg(els.snapshotInfo, "No term data yet — ask admin to upload CSVs", "error");
@@ -249,7 +212,6 @@ async function loadClassesForSelectedTerm() {
   try {
     setMsg(els.snapshotInfo, `Loading classes for ${year} Term ${term}…`);
     const classes = await (await authedFetch(`/api/terms/${year}/${term}/classes`)).json();
-    if (DEBUG) console.log("[classes]", classes);
 
     if (!Array.isArray(classes) || classes.length === 0) {
       els.classSelect.innerHTML = `<option value="">(no classes)</option>`;
@@ -460,9 +422,14 @@ if (trendFrom == null || trendTo == null) {
   }
 }
 
-// Put a caption on the big table
-const caption = els.dataTable.querySelector("caption") || els.dataTable.createCaption();
-caption.textContent = (trendFrom != null && trendTo != null)
+// Put a caption on the compact grid
+let cap = els.compactGrid.querySelector(".grid-caption");
+if (!cap) {
+  cap = document.createElement("div");
+  cap.className = "grid-caption";
+  els.compactGrid.prepend(cap);
+}
+cap.textContent = (trendFrom != null && trendTo != null)
   ? `Attendance trend from Week ${trendFrom} to Week ${trendTo}`
   : `Attendance trend: (weeks unavailable)`;
 
@@ -596,24 +563,6 @@ function applyWeekVisibility() {
 
 
 
-// ====== Events ======
-els.refreshBtn.addEventListener("click", async () => {
-  await populateTerms();
-});
 
-els.loadTermBtn.addEventListener("click", async () => {
-  await loadClassesForSelectedTerm();
-});
-
-els.classSelect.addEventListener("change", () => {
-  loadRollupForClass();
-});
-
-if (els.toggleWeeks) {
-  els.toggleWeeks.addEventListener("change", () => {
-    showWeeks = !!els.toggleWeeks.checked;
-    applyWeekVisibility();
-  });
-}
 
 
