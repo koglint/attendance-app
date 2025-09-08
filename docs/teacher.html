@@ -183,16 +183,17 @@
         <fieldset>
             <legend>Sign in</legend>
 
-            <form id="authForm" autocomplete="on" novalidate>
+            <form id="authForm" method="post" action="#" autocomplete="on" novalidate>
                 <label for="email">Email</label><br />
                 <input id="email" name="email" type="email" inputmode="email" autocapitalize="none" spellcheck="false"
                     autocomplete="username" required /><br /><br />
-
+            
                 <label for="password">Password</label><br />
                 <input id="password" name="password" type="password" autocomplete="current-password" required /><br /><br />
-
+            
                 <button id="signInBtn" type="submit">Sign in</button>
             </form>
+
 
             <div id="authMsg" class="muted" role="status" aria-live="polite"></div>
         </fieldset>

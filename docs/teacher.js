@@ -59,10 +59,19 @@ function showSignedOutUI() {
   setMsg(els.authMsg, "");
   setMsg(els.snapshotInfo, "Pick a year & term, then Load.");
   setMsg(els.tableMsg, "Choose a class to view.");
-  els.classSelect.innerHTML = `<option value="">(select a class)</option>`;
   els.dataTable.style.display = "none";
-  els.thead.innerHTML = "";
-  els.tbody.innerHTML = "";
+  // placeholder
+  els.classSelect.replaceChildren();
+  {
+    const def = document.createElement("option");
+    def.value = "";
+    def.textContent = "(select a class)";
+    els.classSelect.appendChild(def);
+  }
+  // clear table sections safely
+  els.thead.replaceChildren();
+  els.tbody.replaceChildren();
+
   if (els.toggleWeeks) els.toggleWeeks.checked = false;
     showWeeks = false;
 
@@ -106,9 +115,10 @@ function formatUploadedAt(uploadedAt) {
           await auth.signInWithEmailAndPassword(email, password);
           setMsg(els.authMsg, "Signed in", "ok");
         } catch (err) {
-          console.error("[auth] signIn error:", { code: err?.code, message: err?.message, full: err });
-          setMsg(els.authMsg, `${err?.code || ""} ${err?.message || "Sign-in failed"}`, "error");
-        }
+  console.error("[auth] signIn error:");
+  setMsg(els.authMsg, "Sign-in failed. Check your credentials.", "error");
+}
+
       });
     } else if (els.signInBtn) {
       els.signInBtn.addEventListener("click", async () => {
@@ -117,9 +127,10 @@ function formatUploadedAt(uploadedAt) {
           await auth.signInWithEmailAndPassword(els.email.value.trim(), els.password.value);
           setMsg(els.authMsg, "Signed in", "ok");
         } catch (err) {
-          console.error("[auth] signIn error:", { code: err?.code, message: err?.message, full: err });
-          setMsg(els.authMsg, `${err?.code || ""} ${err?.message || "Sign-in failed"}`, "error");
-        }
+  console.error("[auth] signIn error:");
+  setMsg(els.authMsg, "Sign-in failed. Check your credentials.", "error");
+}
+
       });
     }
 
@@ -185,13 +196,20 @@ async function populateTerms() {
       return;
     }
 
-    // Build Year options based on returned terms
-    const years = Array.from(new Set(terms.map(t => t.year))).sort((a,b) => b - a);
-    els.yearSelect.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join("");
+    // Build Year options based on returned terms (safe)
+    const years = Array.from(new Set(terms.map(t => t.year))).sort((a, b) => b - a);
+    els.yearSelect.replaceChildren();
+    for (const y of years) {
+      const opt = document.createElement("option");
+      opt.value = String(y);
+      opt.textContent = String(y);
+      els.yearSelect.appendChild(opt);
+    }
 
     // Choose latest term by default (first item is newest due to sort)
     els.yearSelect.value = String(terms[0].year);
     els.termSelect.value = String(terms[0].term);
+
 
     // Show a quick “weeks present” note
     const weeks = terms.find(t => t.year === terms[0].year && t.term === terms[0].term)?.weeks || [];
@@ -214,18 +232,41 @@ async function loadClassesForSelectedTerm() {
     const classes = await (await authedFetch(`/api/terms/${year}/${term}/classes`)).json();
 
     if (!Array.isArray(classes) || classes.length === 0) {
-      els.classSelect.innerHTML = `<option value="">(no classes)</option>`;
+      els.classSelect.replaceChildren();
+{
+  const none = document.createElement("option");
+  none.value = "";
+  none.textContent = "(no classes)";
+  els.classSelect.appendChild(none);
+}
+
       setMsg(els.snapshotInfo, `No classes found for ${year} Term ${term}`);
       return;
     }
-    els.classSelect.innerHTML = `<option value="">(select a class)</option>` +
-      classes.map(c => `<option value="${encodeURIComponent(c.rollClass)}">${c.rollClass}</option>`).join("");
+    // Reset and add placeholder
+    els.classSelect.replaceChildren();
+    {
+      const def = document.createElement("option");
+      def.value = "";
+      def.textContent = "(select a class)";
+      els.classSelect.appendChild(def);
+    }
+    // Add class options safely
+    for (const c of classes) {
+      const opt = document.createElement("option");
+      // store the raw value; URL-encode later when you build a URL
+      opt.value = String(c.rollClass);
+      opt.textContent = String(c.rollClass);
+      els.classSelect.appendChild(opt);
+    }
+
 
     // Clear the table until a class is chosen for this term
-    els.thead.innerHTML = "";
-    els.tbody.innerHTML = "";
+    els.thead.replaceChildren();
+    els.tbody.replaceChildren();
     els.dataTable.style.display = "none";
     setMsg(els.tableMsg, "Choose a class to view.");
+
   
 
     setMsg(els.snapshotInfo, `${year} Term ${term} • ${classes.length} classes`);
@@ -253,6 +294,7 @@ function renderTrendBadge(status) {
 
   const img = document.createElement("img");
   img.alt = m.alt;
+  img.referrerPolicy = "no-referrer";
   img.loading = "lazy";
   img.decoding = "async";
   img.src = m.src;                    // ← the missing line
@@ -374,7 +416,7 @@ if (badge instanceof Element) {
 
 // ====== Rollup (table) ======
 async function loadRollupForClass() {
-  const rollClass = els.classSelect.value ? decodeURIComponent(els.classSelect.value) : "";
+  const rollClass = els.classSelect.value || "";
   const year = Number(els.yearSelect.value);
   const term = Number(els.termSelect.value);
   if (!rollClass) { return; }
@@ -384,9 +426,10 @@ async function loadRollupForClass() {
     // Hide both while repopulating
     els.dataTable.style.display = "none";
     els.compactGrid.style.display = "none";
-    els.tbody.innerHTML = "";
-    els.thead.innerHTML = "";
-    els.compactGrid.innerHTML = "";
+    els.tbody.replaceChildren();
+    els.thead.replaceChildren();
+    els.compactGrid.replaceChildren();
+
 
     const encRC = encodeURIComponent(rollClass);
 

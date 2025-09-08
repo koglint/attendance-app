@@ -30,8 +30,6 @@ const els = {
   rosterFile: document.getElementById("rosterFile"),
   uploadRosterBtn: document.getElementById("uploadRosterBtn"),
   rosterUploadMsg: document.getElementById("rosterUploadMsg"),
-
-
 };
 
 // Populate Year: currentYear-1 .. currentYear+1
@@ -39,19 +37,17 @@ const els = {
   const now = new Date();
   const y = now.getFullYear();
   const years = [y - 1, y, y + 1];
-  els.yearSelect.innerHTML = years.map(v => `<option value="${v}">${v}</option>`).join("");
-  els.yearSelect.value = String(y);
-
-  // Optional: auto-select term by month (AU school calendar assumption)
+  if (els.yearSelect) {
+    els.yearSelect.innerHTML = years.map(v => `<option value="${v}">${v}</option>`).join("");
+    els.yearSelect.value = String(y);
+  }
   const month = now.getMonth() + 1;
   const guessTerm = month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4;
-  els.termSelect.value = String(guessTerm);
+  if (els.termSelect) els.termSelect.value = String(guessTerm);
 })();
 
-
-
-
 function setMsg(el, text, kind="info") {
+  if (!el) return;
   el.textContent = text || "";
   el.className = kind === "error" ? "err"
              : kind === "ok" ? "ok"
@@ -59,186 +55,234 @@ function setMsg(el, text, kind="info") {
 }
 
 function showAuthedUI(user) {
-  els.signInBox.style.display = "none";
-  els.onlyAuthed.style.display = "block";
-  els.signOutBtn.style.display = "inline-block";
-  els.whoami.textContent = `${user.email}`;
+  if (els.signInBox) els.signInBox.style.display = "none";
+  if (els.onlyAuthed) els.onlyAuthed.style.display = "block";
+  if (els.signOutBtn) els.signOutBtn.style.display = "inline-block";
+  if (els.whoami) els.whoami.textContent = user?.email || "";
 }
 
 function showSignedOutUI() {
-  els.signInBox.style.display = "block";
-  els.onlyAuthed.style.display = "none";
-  els.onlyAdmin.style.display = "none";
-  els.signOutBtn.style.display = "none";
-  els.whoami.textContent = "";
+  if (els.signInBox) els.signInBox.style.display = "block";
+  if (els.onlyAuthed) els.onlyAuthed.style.display = "none";
+  if (els.onlyAdmin) els.onlyAdmin.style.display = "none";
+  if (els.signOutBtn) els.signOutBtn.style.display = "none";
+  if (els.whoami) els.whoami.textContent = "";
   setMsg(els.authMsg, "");
   setMsg(els.uploadMsg, "");
-  els.uploadResult.textContent = "";
+  if (els.uploadResult) els.uploadResult.textContent = "";
 }
 
-els.uploadRosterBtn?.addEventListener("click", async () => {
-  if (!els.rosterFile.files.length) {
-    els.rosterUploadMsg.textContent = "Please choose a CSV file.";
-    return;
+// ★ A tiny auth helper that defers to window.firebaseAuth once ready
+const Auth = (() => {
+  let _auth = null;                 // firebase auth instance
+  let _currentUser = null;
+
+  async function ready() {
+    // Wait for whatever bootstrap you do in your firebase-init script
+    // e.g., window.firebaseReady resolves after app+auth initialised with env from Render.
+    if (window.firebaseReady) {
+      try { await window.firebaseReady; } catch { /* ignore */ }
+    }
+    _auth = window.firebaseAuth || null;
+    return _auth;
   }
-  if (!confirm("This will upsert the roster and email lookup. Continue?")) return;
 
-  const user = firebaseAuth.currentUser;
-  if (!user) { els.rosterUploadMsg.textContent = "Sign in first"; return; }
-
-  els.rosterUploadMsg.textContent = "Uploading…";
-
-  try {
-    const token = await user.getIdToken();
-    const fd = new FormData();
-    fd.append("file", els.rosterFile.files[0]);
-
-    const res = await fetch(`${BACKEND_BASE_URL}/api/roster/upload`, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${token}` },
-      body: fd,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-
-    els.rosterUploadMsg.textContent =
-      `Done: ${data.writtenRoster} students, ${data.writtenLookup} emails. ` +
-      `${data.warnings?.duplicateEmails?.length || 0} duplicate emails.`;
-  } catch (e) {
-    els.rosterUploadMsg.textContent = `Failed: ${e.message || e}`;
+  function onChange(cb) {
+    if (_auth?.onAuthStateChanged) {
+      _auth.onAuthStateChanged((u) => {
+        _currentUser = u || null;
+        cb(_currentUser);
+      });
+    } else {
+      // If there's no firebase on the page, treat as signed-out
+      _currentUser = null;
+      cb(null);
+    }
   }
-});
 
-
-// ====== Auth listeners ======
-firebaseAuth.onAuthStateChanged(async (user) => {
-  if (!user) return showSignedOutUI();
-  showAuthedUI(user);
-
-  // ✅ Show admin panel only for admins
-  try {
-    const token = await user.getIdToken();
-    const r = await fetch(`${BACKEND_BASE_URL}/api/whoami`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const me = await r.json().catch(() => ({}));
-    els.onlyAdmin.style.display = (me.role === "admin") ? "block" : "none";
-  } catch {
-    els.onlyAdmin.style.display = "none";
+  async function signIn(email, password) {
+    if (!_auth?.signInWithEmailAndPassword) throw new Error("Auth not initialised");
+    const cred = await _auth.signInWithEmailAndPassword(email.trim(), password);
+    _currentUser = cred.user;
+    return _currentUser;
   }
-});
 
-els.signOutBtn.addEventListener("click", () => firebaseAuth.signOut());
-
-els.signInBtn.addEventListener("click", async () => {
-  setMsg(els.authMsg, "Signing in...");
-  try {
-    await firebaseAuth.signInWithEmailAndPassword(els.email.value.trim(), els.password.value);
-    setMsg(els.authMsg, "Signed in", "ok");
-  } catch (e) {
-    setMsg(els.authMsg, e.message || "Sign-in failed", "error");
+  async function signOut() {
+    if (_auth?.signOut) await _auth.signOut();
+    _currentUser = null;
   }
-});
 
-// ====== Upload handling ======
-els.uploadBtn.addEventListener("click", async () => {
-  const user = firebaseAuth.currentUser;
-  if (!user) return setMsg(els.uploadMsg, "Please sign in first", "error");
+  function getUser() { return _currentUser; }
 
-  const file = els.csvFile.files[0];
-  if (!file) return setMsg(els.uploadMsg, "Choose a CSV file", "error");
+  async function getToken() {
+    const u = _currentUser || _auth?.currentUser || null;
+    if (!u?.getIdToken) return null;
+    return await u.getIdToken();
+  }
 
-  setMsg(els.uploadMsg, "Uploading...");
-  els.uploadResult.textContent = "";
+  // ★ Centralised authed fetch:
+  async function fetch(path, init = {}) {
+    const token = await getToken();
+    const headers = new Headers(init.headers || {});
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    // Avoid sending both Authorization and credentials: 'include' together unless you need cookies.
+    const final = {
+      ...init,
+      headers,
+    };
+    return await window.fetch(path, final);
+  }
 
-  try {
-    const token = await user.getIdToken();
-    const fd = new FormData();
-    fd.append("file", file, file.name);
+  return { ready, onChange, signIn, signOut, getUser, getToken, fetch };
+})();
 
+// ★ Wrap all event wiring in a single async bootstrap so we only touch auth after it's ready
+(async function bootstrap() {
+  await Auth.ready();
 
-    // Add the snapshot labels
-    const year = Number(els.yearSelect.value);
-    const term = Number(els.termSelect.value);
-    const week = Number(els.weekSelect.value);
-    if (!Number.isInteger(year) || year < 2000 || year > 2100)
-      return setMsg(els.uploadMsg, "Please choose a valid Year", "error");
-    if (![1,2,3,4].includes(term))
-      return setMsg(els.uploadMsg, "Please choose a valid Term (1-4)", "error");
-    if (!Number.isInteger(week) || week < 1 || week > 12)
-      return setMsg(els.uploadMsg, "Please choose a valid Week (1-12)", "error");
-    fd.append("year", String(year));
-    fd.append("term", String(term));
-    fd.append("week", String(week));
-
-
-    // ... after you've validated year/term/week and appended them to FormData
-
-// >>> ADD THIS CONFIRMATION POPUP <<<
-const proceed = window.confirm(
-  `Are you sure you want to upload this CSV?\n\n` +
-  `• File: ${file.name}\n` +
-  `• Year: ${year}\n` +
-  `• Term: ${term}\n` +
-  `• Week: ${week}\n\n` +
-  `This will create a new snapshot and may overwrite existing data for these labels.`
-);
-if (!proceed) {
-  setMsg(els.uploadMsg, "Upload cancelled.");
-  return; // stop here if they clicked "Cancel"
-}
-// <<< END CONFIRMATION >>>
-
-
-
-
-
-    const resp = await fetch(`${BACKEND_BASE_URL}/api/uploads`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: fd
-    });
-
-    const text = await resp.text();
-    let data;
-    try { data = JSON.parse(text); } catch { data = { raw: text }; }
-
-    if (!resp.ok) {
-      setMsg(els.uploadMsg, "Upload failed", "error");
-      els.uploadResult.textContent = JSON.stringify(data, null, 2);
+  // ====== Roster Upload ======
+  els.uploadRosterBtn?.addEventListener("click", async () => {
+    if (!els.rosterFile?.files?.length) {
+      setMsg(els.rosterUploadMsg, "Please choose a CSV file.", "error");
       return;
     }
+    if (!confirm("This will upsert the roster and email lookup. Continue?")) return;
 
-    setMsg(els.uploadMsg, "Upload complete", "ok");
-    els.uploadResult.textContent = JSON.stringify(data, null, 2);
-  } catch (e) {
-    setMsg(els.uploadMsg, e.message || "Network error", "error");
-  }
-});
+    const user = Auth.getUser();
+    if (!user) { setMsg(els.rosterUploadMsg, "Sign in first", "error"); return; }
 
-// ====== Quick check buttons ======
-if (els.checkMetaBtn) {
-  els.checkMetaBtn.addEventListener("click", async () => {
-    const user = firebaseAuth.currentUser;
-    if (!user) return setMsg(els.checkMsg, "Sign in first", "error");
-    const token = await user.getIdToken();
-    const r = await fetch(`${BACKEND_BASE_URL}/api/snapshots/latest/meta`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const j = await r.json().catch(() => ({}));
-    els.checkOut.textContent = JSON.stringify(j, null, 2);
+    setMsg(els.rosterUploadMsg, "Uploading…");
+    try {
+      const fd = new FormData();
+      fd.append("file", els.rosterFile.files[0]);
+
+      const res = await Auth.fetch(`${BACKEND_BASE_URL}/api/roster/upload`, {
+        method: "POST",
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+
+      setMsg(
+        els.rosterUploadMsg,
+        `Done: ${data.writtenRoster} students, ${data.writtenLookup} emails. ${data.warnings?.duplicateEmails?.length || 0} duplicate emails.`,
+        "ok"
+      );
+    } catch (e) {
+      setMsg(els.rosterUploadMsg, `Failed: ${e.message || e}`, "error");
+    }
   });
-}
-if (els.checkClassesBtn) {
-  els.checkClassesBtn.addEventListener("click", async () => {
-    const user = firebaseAuth.currentUser;
-    if (!user) return setMsg(els.checkMsg, "Sign in first", "error");
-    const token = await user.getIdToken();
-    const r = await fetch(`${BACKEND_BASE_URL}/api/snapshots/latest/classes`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const j = await r.json().catch(() => ({}));
-    els.checkOut.textContent = JSON.stringify(j, null, 2);
+
+  // ====== Auth listeners ======
+  Auth.onChange(async (user) => {
+    if (!user) return showSignedOutUI();
+    showAuthedUI(user);
+
+    // ✅ Show admin panel only for admins
+    try {
+      const r = await Auth.fetch(`${BACKEND_BASE_URL}/api/whoami`, { method: "GET" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const me = await r.json().catch(() => ({}));
+      if (els.onlyAdmin) els.onlyAdmin.style.display = (me.role === "admin") ? "block" : "none";
+    } catch {
+      if (els.onlyAdmin) els.onlyAdmin.style.display = "none";
+    }
   });
-}
+
+  // ====== Sign in/out buttons ======
+  els.signOutBtn?.addEventListener("click", () => Auth.signOut());
+
+  els.signInBtn?.addEventListener("click", async () => {
+    setMsg(els.authMsg, "Signing in...");
+    try {
+      await Auth.signIn(els.email.value, els.password.value);
+      setMsg(els.authMsg, "Signed in", "ok");
+    } catch (e) {
+      setMsg(els.authMsg, e.message || "Sign-in failed", "error");
+    }
+  });
+
+  // ====== CSV Upload handling ======
+  els.uploadBtn?.addEventListener("click", async () => {
+    const user = Auth.getUser();
+    if (!user) return setMsg(els.uploadMsg, "Please sign in first", "error");
+
+    const file = els.csvFile?.files?.[0];
+    if (!file) return setMsg(els.uploadMsg, "Choose a CSV file", "error");
+
+    setMsg(els.uploadMsg, "Uploading...");
+    if (els.uploadResult) els.uploadResult.textContent = "";
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file, file.name);
+
+      // Add the snapshot labels
+      const year = Number(els.yearSelect?.value);
+      const term = Number(els.termSelect?.value);
+      const week = Number(els.weekSelect?.value);
+
+      if (!Number.isInteger(year) || year < 2000 || year > 2100)
+        return setMsg(els.uploadMsg, "Please choose a valid Year", "error");
+      if (![1, 2, 3, 4].includes(term))
+        return setMsg(els.uploadMsg, "Please choose a valid Term (1-4)", "error");
+      if (!Number.isInteger(week) || week < 1 || week > 12)
+        return setMsg(els.uploadMsg, "Please choose a valid Week (1-12)", "error");
+
+      fd.append("year", String(year));
+      fd.append("term", String(term));
+      fd.append("week", String(week));
+
+      // Confirmation popup
+      const proceed = window.confirm(
+        `Are you sure you want to upload this CSV?\n\n` +
+        `• File: ${file.name}\n` +
+        `• Year: ${year}\n` +
+        `• Term: ${term}\n` +
+        `• Week: ${week}\n\n` +
+        `This will create a new snapshot and may overwrite existing data for these labels.`
+      );
+      if (!proceed) {
+        setMsg(els.uploadMsg, "Upload cancelled.");
+        return;
+      }
+
+      const resp = await Auth.fetch(`${BACKEND_BASE_URL}/api/uploads`, {
+        method: "POST",
+        body: fd
+      });
+
+      const text = await resp.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+      if (!resp.ok) {
+        setMsg(els.uploadMsg, "Upload failed", "error");
+        if (els.uploadResult) els.uploadResult.textContent = JSON.stringify(data, null, 2);
+        return;
+      }
+
+      setMsg(els.uploadMsg, "Upload complete", "ok");
+      if (els.uploadResult) els.uploadResult.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+      setMsg(els.uploadMsg, e.message || "Network error", "error");
+    }
+  });
+
+  // ====== Quick check buttons ======
+  els.checkMetaBtn?.addEventListener("click", async () => {
+    const user = Auth.getUser();
+    if (!user) return setMsg(els.checkMsg, "Sign in first", "error");
+    const r = await Auth.fetch(`${BACKEND_BASE_URL}/api/snapshots/latest/meta`, { method: "GET" });
+    const j = await r.json().catch(() => ({}));
+    if (els.checkOut) els.checkOut.textContent = JSON.stringify(j, null, 2);
+  });
+
+  els.checkClassesBtn?.addEventListener("click", async () => {
+    const user = Auth.getUser();
+    if (!user) return setMsg(els.checkMsg, "Sign in first", "error");
+    const r = await Auth.fetch(`${BACKEND_BASE_URL}/api/snapshots/latest/classes`, { method: "GET" });
+    const j = await r.json().catch(() => ({}));
+    if (els.checkOut) els.checkOut.textContent = JSON.stringify(j, null, 2);
+  });
+})();
