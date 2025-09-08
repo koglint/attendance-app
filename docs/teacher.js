@@ -422,16 +422,6 @@ if (trendFrom == null || trendTo == null) {
   }
 }
 
-// Put a caption on the compact grid
-let cap = els.compactGrid.querySelector(".grid-caption");
-if (!cap) {
-  cap = document.createElement("div");
-  cap.className = "grid-caption";
-  els.compactGrid.prepend(cap);
-}
-cap.textContent = (trendFrom != null && trendTo != null)
-  ? `Attendance trend from Week ${trendFrom} to Week ${trendTo}`
-  : `Attendance trend: (weeks unavailable)`;
 
 
     // Stable shuffle per day + class + term so students can't infer identities
@@ -527,11 +517,16 @@ cap.textContent = (trendFrom != null && trendTo != null)
     // Now toggle which layout is visible
     applyWeekVisibility();
 
-    setMsg(
-      els.tableMsg,
-      `${rows.length} students • Weeks: ${weeks.join(", ") || "—"}`,
-      "ok"
-    );
+    const trendText = (trendFrom != null && trendTo != null)
+  ? `Trend: Week ${trendFrom} → Week ${trendTo}`
+  : `Trend: (weeks unavailable)`;
+
+setMsg(
+  els.tableMsg,
+  `${rows.length} students • Weeks: ${weeks.join(", ") || "—"} • ${trendText}`,
+  "ok"
+);
+
   } catch (e) {
     setMsg(els.tableMsg, e.message || "Failed to load rollup", "error");
   }
