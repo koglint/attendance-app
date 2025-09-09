@@ -104,17 +104,15 @@
         }
     </style>
 
-    <!-- Configure your backend base URL here (same you used in admin/teacher pages) -->
-    <script>
-        window.BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com";
-        window.FIREBASE_CONFIG = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_PROJECT.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID",
-            appId: "YOUR_APP_ID"
-            // (the public web config — safe to embed)
-        };
-    </script>
+    <!-- compat SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
+
+    <!-- your bootstrap that fetches config from Render and initialises Firebase -->
+    <script src="./firebase-init.js"></script>
+
+
+
 </head>
 
 <body>
@@ -198,6 +196,10 @@
         </section>
     </div>
 
+    <script>
+        window.BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com";
+    </script>
+    
     <!-- student.js is an ES module -->
     <script type="module" src="./student.js"></script>
 </body>

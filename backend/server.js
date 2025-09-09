@@ -268,21 +268,35 @@ async function recomputeLatestTrendForTerm(db, schoolRef, year, term) {
 
 // --- Trend helpers ---
 const TREND = Object.freeze({
-  DIAMOND: "diamond", // improved
-  GOLD: "gold",       // maintained
-  SILVER: "silver",   // lower
+  GOAT: "goat",      // NEW: perfect last week AND this week
+  DIAMOND: "diamond",
+  GOLD: "gold",
+  SILVER: "silver",
 });
-const TREND_EPSILON = 0.1; // tolerance (percentage points)
+
+const TREND_EPSILON = 0.1; // existing
+
+// Treat “100%” robustly (in case of 99.999… etc)
+const isHundred = (x, tol = 1e-6) => Number.isFinite(x) && Math.abs(x - 100) <= tol;
+
 
 /** Compare two 0–100 percentages and return a TREND or null if not computable. */
 function compareTrend(curr, prev, eps = TREND_EPSILON) {
   if (Number.isFinite(curr) && Number.isFinite(prev)) {
+    // NEW: both weeks perfect
+    if (isHundred(curr) && isHundred(prev)) return TREND.GOAT;
+
     if (curr - prev > eps) return TREND.DIAMOND;
     if (prev - curr > eps) return TREND.SILVER;
     return TREND.GOLD;
   }
   return null;
 }
+
+
+
+
+
 
 /** Find the snapshot doc for the most recent week < current within the same Year/Term. */
 async function findPreviousSnapshotRef(db, schoolRef, year, term, week) {
