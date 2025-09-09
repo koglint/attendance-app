@@ -28,8 +28,12 @@
             cursor: pointer;
         }
 
-        #onlyAuthed,
-        #onlyAdmin {
+        #adminContent { 
+            display: none; 
+        }
+
+        #onlyAuthed
+        {
             display: none;
         }
 
@@ -80,77 +84,82 @@
         </fieldset>
     </section>
 
-    <section class="card">
-        <h3>Upload Roster (Email ↔ Student ID)</h3>
-        <p>CSV headers required: <code>Surname</code>, <code>Given Names</code>, <code>Student ID</code>,
-            <code>Email</code>, <code>Roll Class</code>.</p>
-        <input type="file" id="rosterFile" accept=".csv,text/csv" />
-        <button id="uploadRosterBtn">Upload roster CSV</button>
-        <div id="rosterUploadMsg"></div>
-    </section>
-
-
-    <!-- Visible to any signed-in user; the server still enforces role -->
-    <section id="onlyAuthed">
-        <fieldset>
-            <legend>Upload weekly CSV</legend>
-
+    <main id="adminContent">
+        <div>
+            <section class="card">
+                <h3>Upload Roster (Email ↔ Student ID)</h3>
+                <p>CSV headers required: <code>Surname</code>, <code>Given Names</code>, <code>Student ID</code>,
+                    <code>Email</code>, <code>Roll Class</code>.
+                </p>
+                <input type="file" id="rosterFile" accept=".csv,text/csv" />
+                <button id="uploadRosterBtn">Upload roster CSV</button>
+                <div id="rosterUploadMsg"></div>
+            </section>
             
-
-            <!-- inside <fieldset> for Upload weekly CSV, before the file input -->
-            <div style="display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap">
-                <label>Year<br />
-                    <select id="yearSelect"></select>
-                </label>
             
-                <label>Term<br />
-                    <select id="termSelect">
-                        <option value="1">Term 1</option>
-                        <option value="2">Term 2</option>
-                        <option value="3">Term 3</option>
-                        <option value="4">Term 4</option>
-                    </select>
-                </label>
+            <!-- Visible to any signed-in user; the server still enforces role -->
+            <section id="onlyAuthed">
+                <fieldset>
+                    <legend>Upload weekly CSV</legend>
             
-                <label>Week<br />
-                    <select id="weekSelect">
-                        <!-- 1–12 (adjust if your school uses different ranges) -->
-                        <option>1</option>
-                        <option>2</option>
-                        <option>3</option>
-                        <option>4</option>
-                        <option>5</option>
-                        <option>6</option>
-                        <option>7</option>
-                        <option>8</option>
-                        <option>9</option>
-                        <option>10</option>
-                        <option>11</option>
-                        <option>12</option>
-                    </select>
-                </label>
-            </div>
-
-
-            <p class="muted">Expected columns (case/spacing tolerant): <code class="mono">External id</code>, <code
-                    class="mono">Rollclass name</code>, <code class="mono">Percentage present</code>.</p>
-            <input id="csvFile" type="file" accept=".csv,text/csv" />
-            <button id="uploadBtn">Upload</button>
-            <div id="uploadMsg" class="muted"></div>
-            <pre id="uploadResult" class="mono"></pre>
-        </fieldset>
-    </section>
-
-    <!-- Optional: show quick links to teacher read endpoints -->
-    <section id="onlyAdmin">
-        <fieldset>
-            <legend>Quick checks</legend>
-            <button id="checkMetaBtn">Check latest snapshot meta</button>
-            <button id="checkClassesBtn">List classes</button>
-            <div id="checkMsg" class="muted"></div>
-            <pre id="checkOut" class="mono"></pre>
-        </fieldset>
-    </section>
+            
+            
+                    <!-- inside <fieldset> for Upload weekly CSV, before the file input -->
+                    <div style="display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap">
+                        <label>Year<br />
+                            <select id="yearSelect"></select>
+                        </label>
+            
+                        <label>Term<br />
+                            <select id="termSelect">
+                                <option value="1">Term 1</option>
+                                <option value="2">Term 2</option>
+                                <option value="3">Term 3</option>
+                                <option value="4">Term 4</option>
+                            </select>
+                        </label>
+            
+                        <label>Week<br />
+                            <select id="weekSelect">
+                                <!-- 1–12 (adjust if your school uses different ranges) -->
+                                <option>1</option>
+                                <option>2</option>
+                                <option>3</option>
+                                <option>4</option>
+                                <option>5</option>
+                                <option>6</option>
+                                <option>7</option>
+                                <option>8</option>
+                                <option>9</option>
+                                <option>10</option>
+                                <option>11</option>
+                                <option>12</option>
+                            </select>
+                        </label>
+                    </div>
+            
+            
+                    <p class="muted">Expected columns (case/spacing tolerant): <code class="mono">External id</code>, <code
+                            class="mono">Rollclass name</code>, <code class="mono">Percentage present</code>.</p>
+                    <input id="csvFile" type="file" accept=".csv,text/csv" />
+                    <button id="uploadBtn">Upload</button>
+                    <div id="uploadMsg" class="muted"></div>
+                    <pre id="uploadResult" class="mono"></pre>
+                </fieldset>
+            </section>
+            
+            <!-- Optional: show quick links to teacher read endpoints -->
+            <section id="quickChecks">
+                <fieldset>
+                    <legend>Quick checks</legend>
+                    <button id="checkMetaBtn">Check latest snapshot meta</button>
+                    <button id="checkClassesBtn">List classes</button>
+                    <div id="checkMsg" class="muted"></div>
+                    <pre id="checkOut" class="mono"></pre>
+                </fieldset>
+            </section>
+        </div>
+    </main>
 </body>
 
 </html>

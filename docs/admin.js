@@ -17,7 +17,6 @@ const els = {
   uploadMsg: document.getElementById("uploadMsg"),
   uploadResult: document.getElementById("uploadResult"),
 
-  onlyAdmin: document.getElementById("onlyAdmin"),
   checkMetaBtn: document.getElementById("checkMetaBtn"),
   checkClassesBtn: document.getElementById("checkClassesBtn"),
   checkMsg: document.getElementById("checkMsg"),
@@ -56,15 +55,17 @@ function setMsg(el, text, kind="info") {
 
 function showAuthedUI(user) {
   if (els.signInBox) els.signInBox.style.display = "none";
-  if (els.onlyAuthed) els.onlyAuthed.style.display = "block";
   if (els.signOutBtn) els.signOutBtn.style.display = "inline-block";
   if (els.whoami) els.whoami.textContent = user?.email || "";
 }
 
 function showSignedOutUI() {
+  IS_ADMIN = false; // reset admin flag on sign-out
+  if (document.getElementById("adminContent")) {
+    document.getElementById("adminContent").style.display = "none";
+  }
   if (els.signInBox) els.signInBox.style.display = "block";
   if (els.onlyAuthed) els.onlyAuthed.style.display = "none";
-  if (els.onlyAdmin) els.onlyAdmin.style.display = "none";
   if (els.signOutBtn) els.signOutBtn.style.display = "none";
   if (els.whoami) els.whoami.textContent = "";
   setMsg(els.authMsg, "");
@@ -136,18 +137,25 @@ const Auth = (() => {
   return { ready, onChange, signIn, signOut, getUser, getToken, fetch };
 })();
 
+// === Admin gate ===
+let IS_ADMIN = false;
+
+
 // ★ Wrap all event wiring in a single async bootstrap so we only touch auth after it's ready
 (async function bootstrap() {
   await Auth.ready();
 
   // ====== Roster Upload ======
   els.uploadRosterBtn?.addEventListener("click", async () => {
+    if (!IS_ADMIN) { setMsg(els.rosterUploadMsg, "Admin access required.", "error"); return; }
+
     if (!els.rosterFile?.files?.length) {
       setMsg(els.rosterUploadMsg, "Please choose a CSV file.", "error");
       return;
     }
     if (!confirm("This will upsert the roster and email lookup. Continue?")) return;
 
+    
     const user = Auth.getUser();
     if (!user) { setMsg(els.rosterUploadMsg, "Sign in first", "error"); return; }
 
@@ -173,21 +181,42 @@ const Auth = (() => {
     }
   });
 
-  // ====== Auth listeners ======
-  Auth.onChange(async (user) => {
-    if (!user) return showSignedOutUI();
-    showAuthedUI(user);
+// ====== Auth listeners ======
+Auth.onChange(async (user) => {
+  if (!user) {
+    showSignedOutUI();
+    return;
+  }
+  showAuthedUI(user); // hides login box, shows sign-out + whoami
 
-    // ✅ Show admin panel only for admins
-    try {
-      const r = await Auth.fetch(`${BACKEND_BASE_URL}/api/whoami`, { method: "GET" });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const me = await r.json().catch(() => ({}));
-      if (els.onlyAdmin) els.onlyAdmin.style.display = (me.role === "admin") ? "block" : "none";
-    } catch {
-      if (els.onlyAdmin) els.onlyAdmin.style.display = "none";
+  try {
+    const r = await Auth.fetch(`${BACKEND_BASE_URL}/api/whoami`, { method: "GET" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const me = await r.json().catch(() => ({}));
+
+    IS_ADMIN = (me.role === "admin");
+    const adminContent = document.getElementById("adminContent");
+
+    if (IS_ADMIN) {
+      if (adminContent) adminContent.style.display = "block";
+      if (els.onlyAuthed) els.onlyAuthed.style.display = "block";
+    } else {
+      if (adminContent) adminContent.style.display = "none";
+      if (els.onlyAuthed) els.onlyAuthed.style.display = "none";
+      setMsg(els.authMsg, "Admin access required.", "error");
     }
-  });
+  } catch (e) {
+    IS_ADMIN = false;
+    const adminContent = document.getElementById("adminContent");
+    if (adminContent) adminContent.style.display = "none";
+    if (els.onlyAuthed) els.onlyAuthed.style.display = "none";
+  }
+});
+
+
+
+
+
 
   // ====== Sign in/out buttons ======
   els.signOutBtn?.addEventListener("click", () => Auth.signOut());
@@ -204,6 +233,8 @@ const Auth = (() => {
 
   // ====== CSV Upload handling ======
   els.uploadBtn?.addEventListener("click", async () => {
+    if (!IS_ADMIN) { setMsg(els.uploadMsg, "Admin access required.", "error"); return; }
+
     const user = Auth.getUser();
     if (!user) return setMsg(els.uploadMsg, "Please sign in first", "error");
 
@@ -271,6 +302,7 @@ const Auth = (() => {
 
   // ====== Quick check buttons ======
   els.checkMetaBtn?.addEventListener("click", async () => {
+    if (!IS_ADMIN) { setMsg(els.checkMsg, "Admin access required.", "error"); return; }
     const user = Auth.getUser();
     if (!user) return setMsg(els.checkMsg, "Sign in first", "error");
     const r = await Auth.fetch(`${BACKEND_BASE_URL}/api/snapshots/latest/meta`, { method: "GET" });
@@ -279,6 +311,7 @@ const Auth = (() => {
   });
 
   els.checkClassesBtn?.addEventListener("click", async () => {
+    if (!IS_ADMIN) { setMsg(els.checkMsg, "Admin access required.", "error"); return; }
     const user = Auth.getUser();
     if (!user) return setMsg(els.checkMsg, "Sign in first", "error");
     const r = await Auth.fetch(`${BACKEND_BASE_URL}/api/snapshots/latest/classes`, { method: "GET" });
