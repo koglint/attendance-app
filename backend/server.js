@@ -312,6 +312,15 @@ async function getStudentCountByRoll(db, schoolId) {
   return map;
 }
 
+// Rolls to exclude from leaderboard (case-insensitive)
+const EXCLUDED_ROLLS = new Set([
+  "SRC",
+  "Connect Roll",
+  "No Roll Class",
+  "SUPPORT",
+].map(s => s.toLowerCase()));
+
+
 async function aggregateTermLeaderboard(db, schoolId, year, term) {
   const schoolRef = db.collection("schools").doc(schoolId);
   const snapsQS = await schoolRef.collection("snapshots")
@@ -336,12 +345,15 @@ async function aggregateTermLeaderboard(db, schoolId, year, term) {
     const rows = await ref.collection("rows").select("rollClass", "trend").get();
     const wkByRoll = {};
     rows.forEach(r => {
-      const rc = r.get("rollClass"); if (!rc) return;
-      const tr = r.get("trend");    if (!tr || !(tr in TREND_TO_POINTS)) return;
-      wkByRoll[rc] ||= { silver:0, gold:0, diamond:0, goat:0, rawPoints:0 };
-      wkByRoll[rc][tr] += 1;
-      wkByRoll[rc].rawPoints += TREND_TO_POINTS[tr];
-    });
+    const rc = r.get("rollClass");
+    if (!rc || EXCLUDED_ROLLS.has(String(rc).toLowerCase())) return; // <-- skip these
+    const tr = r.get("trend");
+    if (!tr || !(tr in TREND_TO_POINTS)) return;
+    wkByRoll[rc] ||= { silver:0, gold:0, diamond:0, goat:0, rawPoints:0 };
+    wkByRoll[rc][tr] += 1;
+    wkByRoll[rc].rawPoints += TREND_TO_POINTS[tr];
+  });
+
     for (const [rc, wk] of Object.entries(wkByRoll)) {
       const agg = ensureRoll(rc);
       agg.weeks[week] = wk;

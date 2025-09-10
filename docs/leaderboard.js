@@ -101,23 +101,16 @@ function renderLeaderboard(weeks, list) {
 
     const tdNorm = document.createElement("td");
     tdNorm.className = "right";
-    tdNorm.textContent = fmt(row.normPoints, 3);
-
-    const tdRaw = document.createElement("td");
-    tdRaw.className = "right";
-    tdRaw.textContent = fmt(row.rawPoints, 0);
-
-    const tdN = document.createElement("td");
-    tdN.className = "right";
-    tdN.textContent = String(row.studentCount ?? 0);
+    tdNorm.textContent = (Number(row.normPoints ?? 0)).toFixed(3);
 
     const tdBr = document.createElement("td");
     tdBr.appendChild(badgeCell(row.counts));
 
-    tr.append(tdRank, tdRoll, tdNorm, tdRaw, tdN, tdBr);
+    tr.append(tdRank, tdRoll, tdNorm, tdBr);
     tbody.appendChild(tr);
   });
 }
+
 
 async function loadDefaults(token) {
   // Try to seed year/term from latest snapshot meta (auth required)
