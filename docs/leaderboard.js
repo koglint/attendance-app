@@ -101,7 +101,7 @@ function renderLeaderboard(weeks, list) {
 
     const tdNorm = document.createElement("td");
     tdNorm.className = "right";
-    tdNorm.textContent = (Number(row.normPoints ?? 0)).toFixed(3);
+    tdNorm.textContent = (Number(row.normPoints * 1000 ?? 0)).toFixed(0);
 
     const tdBr = document.createElement("td");
     tdBr.appendChild(badgeCell(row.counts));
