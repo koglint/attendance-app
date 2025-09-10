@@ -155,7 +155,7 @@
         .legend-item {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
+        justify-content: space-around;
         padding: 4px 10px;
         border-radius: 999px;
         background: none;
@@ -171,31 +171,116 @@
         display: inline-block;
         }
 
-
+        
     </style>
 
-<!-- keep these two compat SDKs first -->
-<script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth-compat.js"></script>
+    <!-- keep these two compat SDKs first -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth-compat.js"></script>
 
-<!-- your init (fetches config & initializes) -->
-<script src="./firebase-init.js" defer></script>
+    <!-- your init (fetches config & initializes) -->
+    <script src="./firebase-init.js" defer></script>
 
-<!-- make teacher.js a module so we can top-level await -->
-<script type="module" src="./teacher.js"></script>
+    <!-- make teacher.js a module so we can top-level await -->
+    <script type="module" src="./teacher.js"></script>
 
-<!-- reCAPTCHA (unchanged) -->
-<script src="https://www.google.com/recaptcha/enterprise.js?render=6Lfl_MArAAAAAK4ZApN30QqbjPZdjIefvZ8vjmI3"></script>
+    <!-- reCAPTCHA (unchanged) -->
+    <script src="https://www.google.com/recaptcha/enterprise.js?render=6Lfl_MArAAAAAK4ZApN30QqbjPZdjIefvZ8vjmI3"></script>
 
 
 
-    <style>
-        /* Hide all weekly % columns when the table has class 'hide-weeks' */
-        #dataTable.hide-weeks th.weekcol,
-        #dataTable.hide-weeks td.weekcol {
-            display: none;
+<style>
+    /* Hide all weekly % columns when the table has class 'hide-weeks' */
+    #dataTable.hide-weeks th.weekcol,
+    #dataTable.hide-weeks td.weekcol {
+        display: none;
+    }
+</style>
+
+<style>
+    /* Make wrappers a positioning context */
+    .trend-badge,
+    .legend-item {
+        position: relative;
+        isolation: isolate;
+    }
+
+    /* ===== DIAMOND (cyan) ===== */
+    .legend-item:has(img[src$="diamond.svg"])::after,
+    .trend-badge:has(img[src$="diamond.svg"])::after {
+        content: "";
+        position: absolute;
+        inset: -6px;
+        /* extend glow a bit beyond the img */
+        border-radius: 50%;
+        background: radial-gradient(closest-side,
+                rgba(0, 255, 255, .55),
+                rgba(0, 255, 255, 0) 70%);
+        filter: blur(10px);
+        opacity: 0;
+        transform: scale(1);
+        z-index: -1;
+        /* behind the img, above page bg */
+        animation: diamondPulse 2400ms ease-in-out infinite;
+        pointer-events: none;
+    }
+
+    @keyframes diamondPulse {
+
+        0%,
+        100% {
+            opacity: 0;
+            transform: scale(1);
         }
-    </style>
+
+        50% {
+            opacity: .8;
+            transform: scale(1.06);
+        }
+    }
+
+    /* ===== GOLDEN GOAT (gold) ===== */
+    .legend-item:has(img[src$="goldenGoat.svg"])::after,
+    .trend-badge:has(img[src$="goldenGoat.svg"])::after {
+        content: "";
+        position: absolute;
+        inset: -6px;
+        border-radius: 50%;
+        background: radial-gradient(closest-side,
+                rgba(255, 215, 0, .60),
+                rgba(255, 215, 0, 0) 70%);
+        filter: blur(10px);
+        opacity: 0;
+        transform: scale(1);
+        z-index: -1;
+        animation: goatPulse 2400ms ease-in-out infinite;
+        pointer-events: none;
+    }
+
+    @keyframes goatPulse {
+
+        0%,
+        100% {
+            opacity: 0;
+            transform: scale(1);
+        }
+
+        50% {
+            opacity: .8;
+            transform: scale(1.06);
+        }
+    }
+
+    /* If you don't want motion to respect OS setting, delete this block */
+    @media (prefers-reduced-motion: reduce) {
+
+        .legend-item::after,
+        .trend-badge::after {
+            animation: none;
+        }
+    }
+</style>
+
 
 </head>
 
@@ -271,10 +356,16 @@
     <legend>Legend</legend>
     <ul class="legend-list" role="list">
         <li class="legend-item">
+            <img src="https://koglint.github.io/attendance-app/assets/trend/goldenGoat.svg" alt="" width="16" height="16"
+                decoding="async">
+            <span> Fortnightly <br /> Attendance 100%</span>
+        </li>
+        <li class="legend-item">
             <img src="https://koglint.github.io/attendance-app/assets/trend/diamond.svg" alt="" width="16" height="16"
                 decoding="async">
             <span> Attendance <br/> Up</span>
         </li>
+        
         <li class="legend-item">
             <img src="https://koglint.github.io/attendance-app/assets/trend/gold.svg" alt="" width="16" height="16"
                 decoding="async">
@@ -285,11 +376,7 @@
                 decoding="async">
             <span> Attendance <br/> Down</span>
         </li>
-        <li class="legend-item">
-            <img src="https://koglint.github.io/attendance-app/assets/trend/goldenGoat.svg" alt="" width="16" height="16"
-                decoding="async">
-            <span> Fortnightly <br /> Attendance 100%</span>
-        </li>
+
 
     </ul>
 </fieldset>

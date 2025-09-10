@@ -1,12 +1,6 @@
-
-
-
 // ==== CONFIG ====
 const BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com";
 let showWeeks = false;
-
-
-
 
 
 // ====== UI refs ======

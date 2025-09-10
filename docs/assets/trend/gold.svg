@@ -1,22 +1,115 @@
-<?xml version="1.0" encoding="utf-8"?><!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
-<svg width="800px" height="800px" viewBox="-3.5 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M9.73795 18.8436L12.9511 20.6987L6.42625 32L4.55349 27.8233L9.73795 18.8436Z" fill="#CE4444"/>
-<path d="M9.73795 18.8436L6.52483 16.9885L0 28.2898L4.55349 27.8233L9.73795 18.8436Z" fill="#983535"/>
-<path d="M14.322 18.8436L11.1088 20.6987L17.6337 32L19.5064 27.8233L14.322 18.8436Z" fill="#983535"/>
-<path d="M14.322 18.8436L17.5351 16.9885L24.0599 28.2898L19.5064 27.8233L14.322 18.8436Z" fill="#CE4444"/>
-<path d="M22.9936 11.0622C22.9936 17.1716 18.0409 22.1243 11.9314 22.1243C5.82194 22.1243 0.869249 17.1716 0.869249 11.0622C0.869249 4.9527 5.82194 0 11.9314 0C18.0409 0 22.9936 4.9527 22.9936 11.0622Z" fill="url(#paint0_linear_103_1801)"/>
-<path d="M20.5665 11.0621C20.5665 15.8311 16.7004 19.6972 11.9315 19.6972C7.16247 19.6972 3.29645 15.8311 3.29645 11.0621C3.29645 6.29315 7.16247 2.42713 11.9315 2.42713C16.7004 2.42713 20.5665 6.29315 20.5665 11.0621Z" fill="#A88300"/>
-<path d="M21.0477 11.984C21.0477 16.7641 17.1727 20.6391 12.3926 20.6391C7.61251 20.6391 3.73748 16.7641 3.73748 11.984C3.73748 7.20389 7.61251 3.32887 12.3926 3.32887C17.1727 3.32887 21.0477 7.20389 21.0477 11.984Z" fill="#C28B37"/>
-<path d="M20.5868 11.0621C20.5868 15.8422 16.7118 19.7172 11.9317 19.7172C7.15159 19.7172 3.27656 15.8422 3.27656 11.0621C3.27656 6.28205 7.15159 2.40702 11.9317 2.40702C16.7118 2.40702 20.5868 6.28205 20.5868 11.0621Z" fill="#C09525"/>
-<path d="M11.9781 5.04096L13.8451 8.77502L17.5792 9.24178L15.0151 12.117L15.7122 16.2431L11.9781 14.3761L8.24404 16.2431L8.94729 12.117L6.37701 9.24178L10.1111 8.77502L11.9781 5.04096Z" fill="url(#paint1_linear_103_1801)"/>
-<defs>
-<linearGradient id="paint0_linear_103_1801" x1="11.1804" y1="4.03192" x2="12.6813" y2="31.965" gradientUnits="userSpaceOnUse">
-<stop stop-color="#FFC600"/>
-<stop offset="1" stop-color="#FFDE69"/>
-</linearGradient>
-<linearGradient id="paint1_linear_103_1801" x1="11.9783" y1="5.04096" x2="11.9783" y2="16.2431" gradientUnits="userSpaceOnUse">
-<stop stop-color="#FFFCDD"/>
-<stop offset="1" stop-color="#FFE896"/>
-</linearGradient>
-</defs>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
+
+<svg
+   width="800px"
+   height="800px"
+   viewBox="-3.5 0 32 32"
+   fill="none"
+   version="1.1"
+   id="svg12"
+   sodipodi:docname="gold.svg"
+   inkscape:version="1.4 (86a8ad7, 2024-10-11)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview12"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.45625"
+     inkscape:cx="399.65665"
+     inkscape:cy="400"
+     inkscape:window-width="2256"
+     inkscape:window-height="1425"
+     inkscape:window-x="-9"
+     inkscape:window-y="-9"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg12" />
+  <path
+     d="m 10.270389,18.958542 2.736274,1.579778 -5.5564733,9.624034 -1.594817,-3.556821 z"
+     fill="#ce4444"
+     id="path1"
+     style="stroke-width:0.851586" />
+  <path
+     d="M 10.270389,18.958542 7.5341391,17.378764 1.9776824,27.002798 5.8553727,26.605533 Z"
+     fill="#983535"
+     id="path2"
+     style="stroke-width:0.851586" />
+  <path
+     d="m 14.174103,18.958542 -2.736317,1.579778 5.556516,9.624034 1.594766,-3.556821 z"
+     fill="#983535"
+     id="path3"
+     style="stroke-width:0.851586" />
+  <path
+     d="m 14.174103,18.958542 2.736232,-1.579778 5.556432,9.624034 -3.877699,-0.397265 z"
+     fill="#ce4444"
+     id="path4"
+     style="stroke-width:0.851586" />
+  <path
+     d="m 21.55872,12.332007 c 0,5.202683 -4.217652,9.420335 -9.42042,9.420335 -5.2027325,0 -9.4203769,-4.217652 -9.4203769,-9.420335 0,-5.2027668 4.2176444,-9.420419 9.4203769,-9.420419 5.202768,0 9.42042,4.2176522 9.42042,9.420419 z"
+     fill="url(#paint0_linear_103_1801)"
+     id="path5"
+     style="fill:url(#paint0_linear_103_1801);stroke-width:0.851586" />
+  <path
+     d="m 19.491834,12.331922 c 0,4.061216 -3.292318,7.353534 -7.353448,7.353534 -4.0612413,0 -7.3534915,-3.292318 -7.3534915,-7.353534 0,-4.0611728 3.2922502,-7.353423 7.3534915,-7.353423 4.06113,0 7.353448,3.2922502 7.353448,7.353423 z"
+     fill="#a88300"
+     id="path6"
+     style="stroke-width:0.851586" />
+  <path
+     d="m 19.901618,13.117 c 0,4.070668 -3.299898,7.370566 -7.370566,7.370566 -4.0706593,0 -7.3705823,-3.299898 -7.3705823,-7.370566 0,-4.070677 3.299923,-7.3705915 7.3705823,-7.3705915 4.070668,0 7.370566,3.2999145 7.370566,7.3705915 z"
+     fill="#c28b37"
+     id="path7"
+     style="stroke-width:0.851586" />
+  <path
+     d="m 19.509122,12.331922 c 0,4.070669 -3.299898,7.370566 -7.370566,7.370566 -4.0706765,0 -7.3705995,-3.299897 -7.3705995,-7.370566 0,-4.0706254 3.299923,-7.3705484 7.3705995,-7.3705484 4.070668,0 7.370566,3.299923 7.370566,7.3705484 z"
+     fill="#c09525"
+     id="path8"
+     style="stroke-width:0.851586" />
+  <path
+     d="m 12.17807,7.2044012 1.589911,3.1798748 3.179909,0.397486 -2.183552,2.448499 0.59364,3.513731 L 12.17807,15.15408 8.9981951,16.743992 9.5970732,13.230261 7.4082576,10.781762 10.588158,10.384276 Z"
+     fill="url(#paint1_linear_103_1801)"
+     id="path9"
+     style="fill:url(#paint1_linear_103_1801);stroke-width:0.851586" />
+  <defs
+     id="defs12">
+    <linearGradient
+       id="paint0_linear_103_1801"
+       x1="11.1804"
+       y1="4.03192"
+       x2="12.6813"
+       y2="31.965"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(0.85158644,0,0,0.85158644,1.9776824,2.911588)">
+      <stop
+         stop-color="#FFC600"
+         id="stop9" />
+      <stop
+         offset="1"
+         stop-color="#FFDE69"
+         id="stop10" />
+    </linearGradient>
+    <linearGradient
+       id="paint1_linear_103_1801"
+       x1="11.9783"
+       y1="5.04096"
+       x2="11.9783"
+       y2="16.2431"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(0.85158644,0,0,0.85158644,1.9776824,2.911588)">
+      <stop
+         stop-color="#FFFCDD"
+         id="stop11" />
+      <stop
+         offset="1"
+         stop-color="#FFE896"
+         id="stop12" />
+    </linearGradient>
+  </defs>
 </svg>
