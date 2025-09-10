@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <base href="./" />
+    <title>Leaderboard — Attendance</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            margin: 1rem 2rem;
+            background: #274472;
+            color: #fff;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        fieldset {
+            border: 1px solid #e7f802;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            border-bottom: 1px solid #e7f802;
+            padding: .6rem;
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            background: #274472;
+        }
+
+        .muted {
+            color: #fff;
+            opacity: .85;
+            font-size: .95rem;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+
+        .right {
+            text-align: right;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            margin-right: 1rem;
+        }
+
+        .badge img {
+            width: 20px;
+            height: 20px;
+            display: block;
+        }
+
+        .tag {
+            border: 1px solid #e7f802;
+            border-radius: 999px;
+            padding: .2rem .6rem;
+            text-decoration: none;
+            color: #fff;
+        }
+    </style>
+
+    <!-- Backend base URL -->
+    <script>window.BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com";</script>
+
+    <!-- Firebase compat SDKs (match teacher.html) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth-compat.js"></script>
+    <!-- your init (fetches config & initializes) -->
+    <script src="./firebase-init.js" defer></script>
+
+    <!-- Page logic -->
+    <script type="module" src="./leaderboard.js"></script>
+</head>
+
+<body>
+    <header>
+        <h1>Leaderboard</h1>
+        <nav style="display:flex; gap:.6rem; align-items:center;">
+            <span id="whoami" class="muted"></span>
+            <a class="tag" href="./teacher.html">↩ Back to Teacher</a>
+        </nav>
+    </header>
+
+    <fieldset>
+        <legend>Filters</legend>
+        <div class="controls">
+            <label>Year<br>
+                <select id="yearSelect"></select>
+            </label>
+            <label>Term<br>
+                <select id="termSelect">
+                    <option value="1">Term 1</option>
+                    <option value="2">Term 2</option>
+                    <option value="3">Term 3</option>
+                    <option value="4">Term 4</option>
+                </select>
+            </label>
+            <button id="loadBtn" type="button">Load leaderboard</button>
+            <span id="status" class="muted"></span>
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Class rankings (normalised points)</legend>
+        <table id="board" aria-live="polite">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Roll class</th>
+                    <th class="right" title="(goat=3, diamond=2, gold=1, silver=0) ÷ students">Norm points</th>
+                    <th class="right">Raw points</th>
+                    <th class="right">Students</th>
+                    <th>Breakdown</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </fieldset>
+
+    <fieldset>
+        <legend>Legend</legend>
+        <div class="muted">
+            <span class="badge"><img src="assets/trend/goldenGoat.svg" alt="goat">Goat(3)</span>
+            <span class="badge"><img src="assets/trend/diamond.svg" alt="diamond">Diamond(2)</span>
+            <span class="badge"><img src="assets/trend/gold.svg" alt="gold">Gold(1)</span>
+            <span class="badge"><img src="assets/trend/silver.svg" alt="silver">Silver(0)</span>
+        </div>
+    </fieldset>
+</body>
+
+</html>

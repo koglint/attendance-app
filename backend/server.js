@@ -294,6 +294,94 @@ function compareTrend(curr, prev, eps = TREND_EPSILON) {
 }
 
 
+// ===== Leaderboard aggregation (term) =====
+const BADGE_POINTS = { silver: 0, gold: 1, diamond: 2, goat: 3 };
+const TREND_TO_POINTS = BADGE_POINTS;
+const MAX_WEEKS = 12;
+
+function termIdOf(year, term) { return `${year}-T${term}`; }
+
+async function getStudentCountByRoll(db, schoolId) {
+  const snap = await db.collection("schools").doc(schoolId).collection("roster").select("rollClass").get();
+  const map = {};
+  snap.forEach(d => {
+    const rc = d.get("rollClass");
+    if (!rc) return;
+    map[rc] = (map[rc] || 0) + 1;
+  });
+  return map;
+}
+
+async function aggregateTermLeaderboard(db, schoolId, year, term) {
+  const schoolRef = db.collection("schools").doc(schoolId);
+  const snapsQS = await schoolRef.collection("snapshots")
+    .where("year", "==", year).where("term", "==", term).get();
+
+  const weeks = [];
+  snapsQS.forEach(d => { const w = d.get("week"); if (Number.isInteger(w)) weeks.push({ week: w, ref: d.ref }); });
+  weeks.sort((a,b) => a.week - b.week);
+  const limited = weeks.slice(0, MAX_WEEKS);
+
+  const byRoll = {};
+  function ensureRoll(rc) {
+    if (!byRoll[rc]) byRoll[rc] = {
+      counts: { silver:0, gold:0, diamond:0, goat:0 },
+      rawPoints: 0,
+      weeks: {}
+    };
+    return byRoll[rc];
+  }
+
+  for (const { week, ref } of limited) {
+    const rows = await ref.collection("rows").select("rollClass", "trend").get();
+    const wkByRoll = {};
+    rows.forEach(r => {
+      const rc = r.get("rollClass"); if (!rc) return;
+      const tr = r.get("trend");    if (!tr || !(tr in TREND_TO_POINTS)) return;
+      wkByRoll[rc] ||= { silver:0, gold:0, diamond:0, goat:0, rawPoints:0 };
+      wkByRoll[rc][tr] += 1;
+      wkByRoll[rc].rawPoints += TREND_TO_POINTS[tr];
+    });
+    for (const [rc, wk] of Object.entries(wkByRoll)) {
+      const agg = ensureRoll(rc);
+      agg.weeks[week] = wk;
+      for (const k of ["silver","gold","diamond","goat"]) agg.counts[k] += wk[k];
+      agg.rawPoints += wk.rawPoints;
+    }
+  }
+
+  const studentCountByRoll = await getStudentCountByRoll(db, schoolId);
+  const leaderboard = Object.entries(byRoll).map(([rollId, agg]) => {
+    const n = Number(studentCountByRoll[rollId] || 0);
+    const normPoints = n > 0 ? agg.rawPoints / n : 0;
+    return {
+      rollId,
+      counts: agg.counts,
+      rawPoints: agg.rawPoints,
+      normPoints,
+      studentCount: n,
+      weeks: agg.weeks
+    };
+  }).sort((a,b) => b.normPoints - a.normPoints);
+
+  return { weeks: limited.map(w=>w.week), leaderboard };
+}
+
+async function writeTermLeaderboard(db, schoolId, year, term, payload) {
+  const termId = termIdOf(year, term);
+  const base = db.collection("schools").doc(schoolId).collection("terms").doc(termId);
+  await base.collection("leaderboard").doc("current").set({
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    year, term,
+    weeks: payload.weeks,
+    leaderboard: payload.leaderboard
+  }, { merge: false });
+}
+
+async function recomputeAndStoreLeaderboardForTerm(db, schoolId, year, term) {
+  const data = await aggregateTermLeaderboard(db, schoolId, year, term);
+  await writeTermLeaderboard(db, schoolId, year, term, data);
+}
 
 
 
@@ -488,6 +576,10 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
 const { latestSnapshotId, compared } = await recomputeLatestTrendForTerm(db, schoolRef, year, term);
 await schoolRef.set({ latestSnapshotId: latestSnapshotId || snapshotRef.id }, { merge: true });
 
+// Recompute and persist the term leaderboard (cumulative + per-week)
+await recomputeAndStoreLeaderboardForTerm(db, SCHOOL_ID, year, term);
+
+
 
     // Finalize
     await snapshotRef.set(
@@ -526,6 +618,26 @@ await schoolRef.set({ latestSnapshotId: latestSnapshotId || snapshotRef.id }, { 
   }
 });
 
+
+// Teacher: read precomputed leaderboard for a term
+app.get("/api/leaderboard", requireAuth("teacher"), async (req, res) => {
+  try {
+    const year = Number(req.query.year);
+    const term = Number(req.query.term);
+    if (!Number.isInteger(year) || ![1,2,3,4].includes(term)) {
+      return res.status(400).json({ error: "invalid year/term" });
+    }
+    const termId = `${year}-T${term}`;
+    const doc = await db.collection("schools").doc(SCHOOL_ID)
+      .collection("terms").doc(termId)
+      .collection("leaderboard").doc("current").get();
+    if (!doc.exists) return res.json({ ok: true, year, term, weeks: [], leaderboard: [] });
+    const data = doc.data() || {};
+    return res.json({ ok: true, year, term, weeks: data.weeks || [], leaderboard: data.leaderboard || [] });
+  } catch (e) {
+    return sendFirestoreError(res, e, "failed to load leaderboard");
+  }
+});
 
 
 
