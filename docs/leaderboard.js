@@ -20,15 +20,25 @@ function fmt(n, d = 3) { return Number(n ?? 0).toFixed(d); }
 function absUrl(rel) { return new URL(rel, document.baseURI).href; }
 
 async function getUserAndToken() {
-  const user = await new Promise(resolve => {
-    const u = firebase.auth().currentUser;
-    if (u) return resolve(u);
-    const unsub = firebase.auth().onAuthStateChanged(v => { unsub(); resolve(v); });
+  await (window.firebaseReady || Promise.resolve());
+  const auth = window.firebaseAuth || firebase.auth();
+
+  // Wait for user if needed
+  const user = auth.currentUser || await new Promise(resolve => {
+    const unsub = auth.onAuthStateChanged(u => { unsub(); resolve(u); });
   });
   if (!user) return { user: null, token: null };
-  const token = await user.getIdToken(/* forceRefresh */ true);
-  return { user, token };
+
+  // IMPORTANT: don't force-refresh (that’s what triggers the 403 on localhost)
+  try {
+    const token = await user.getIdToken();
+    return { user, token };
+  } catch (err) {
+    console.warn("getIdToken blocked (API key / authorized domains):", err);
+    return { user, token: null };
+  }
 }
+
 
 async function apiGet(pathAndQuery, token) {
   const url = new URL(pathAndQuery, window.BACKEND_BASE_URL);
@@ -127,12 +137,16 @@ async function init() {
   els.status.textContent = "Checking sign-in…";
   const { user, token } = await getUserAndToken();
 
-  if (!user || !token) {
-    els.status.textContent = "Please sign in on the Teacher page first.";
-    els.whoami.textContent = "";
-    // We leave the page usable after sign-in (if user signs in in another tab, refresh works)
-    return;
-  }
+if (!user) {
+  els.status.textContent = "Not signed in. Open Teacher page and sign in.";
+  return;
+}
+if (!token) {
+  els.status.textContent =
+    "Auth token blocked by Firebase config. Add localhost to Firebase Auth > Authorized domains, and allow your Web API key for http://localhost in Google Cloud Console.";
+  return;
+}
+
   els.whoami.textContent = `Signed in as ${user.email || user.uid}`;
   els.status.textContent = "";
 
