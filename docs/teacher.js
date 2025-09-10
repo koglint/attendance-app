@@ -277,7 +277,7 @@ async function loadClassesForSelectedTerm() {
 
 // --- Trend badge (tiny UI helper) ---
 function renderTrendBadge(status) {
-  if (!status) return " ¯_(ツ)_/¯";
+  if (!status) return " ¯|_(ツ)_/¯";
 
   const map = {
     diamond: { src: "https://koglint.github.io/attendance-app/assets/trend/diamond.svg", alt: "Diamond (improved)" },
