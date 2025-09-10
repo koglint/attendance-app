@@ -283,7 +283,7 @@ function renderTrendBadge(status) {
     diamond: { src: "https://koglint.github.io/attendance-app/assets/trend/diamond.svg", alt: "Diamond (improved)" },
     gold:    { src: "https://koglint.github.io/attendance-app/assets/trend/gold.svg",    alt: "Gold (maintained)" },
     silver:  { src: "https://koglint.github.io/attendance-app/assets/trend/silver.svg",  alt: "Silver (lower)" },
-    goat:  { src: "https://koglint.github.io/attendance-app/assets/trend/goldenGoatMinimal.svg",  alt: "GOAT (100%)" },
+    goat:  { src: "https://koglint.github.io/attendance-app/assets/trend/goldenGoat.svg",  alt: "GOAT (100%)" },
   };
   const m = map[status];
   if (!m) return "?";
