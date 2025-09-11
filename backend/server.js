@@ -178,7 +178,7 @@ const clamp01 = n => Math.max(0, Math.min(100, n));
 
 // here comes the change
 
-// === ADD: find the latest and second-latest snapshot in a term ===
+// === Returns the latest and second-latest snapshot refs for a given year/term ===
 async function getTopTwoSnapshotRefs(schoolRef, year, term) {
   const snapsQS = await schoolRef.collection("snapshots")
     .where("year", "==", year)
@@ -199,7 +199,7 @@ async function getTopTwoSnapshotRefs(schoolRef, year, term) {
   return { latest, prev };
 }
 
-// === ADD: recompute trend for the latest week vs the previous week for a term ===
+// === Recomputes trend fields for the latest week vs previous week for a term ===
 async function recomputeLatestTrendForTerm(db, schoolRef, year, term) {
   const { latest, prev } = await getTopTwoSnapshotRefs(schoolRef, year, term);
   if (!latest) return { latestSnapshotId: null, compared: null };
@@ -320,7 +320,7 @@ const EXCLUDED_ROLLS = new Set([
   "SUPPORT",
 ].map(s => s.toLowerCase()));
 
-
+// === Aggregates leaderboard data for a term (per roll class, per week) ===
 async function aggregateTermLeaderboard(db, schoolId, year, term) {
   const schoolRef = db.collection("schools").doc(schoolId);
   const snapsQS = await schoolRef.collection("snapshots")
@@ -379,6 +379,7 @@ async function aggregateTermLeaderboard(db, schoolId, year, term) {
   return { weeks: limited.map(w=>w.week), leaderboard };
 }
 
+// === Writes the computed leaderboard for a term to Firestore ===
 async function writeTermLeaderboard(db, schoolId, year, term, payload) {
   const termId = termIdOf(year, term);
   const base = db.collection("schools").doc(schoolId).collection("terms").doc(termId);
@@ -390,11 +391,11 @@ async function writeTermLeaderboard(db, schoolId, year, term, payload) {
   }, { merge: false });
 }
 
+// === Aggregates and writes leaderboard for a term (helper for upload) ===
 async function recomputeAndStoreLeaderboardForTerm(db, schoolId, year, term) {
   const data = await aggregateTermLeaderboard(db, schoolId, year, term);
   await writeTermLeaderboard(db, schoolId, year, term, data);
 }
-
 
 
 

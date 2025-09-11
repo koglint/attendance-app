@@ -103,10 +103,20 @@ function renderLeaderboard(weeks, list) {
     tdNorm.className = "right";
     tdNorm.textContent = (Number(row.normPoints * 1000 ?? 0)).toFixed(0);
 
-    const tdBr = document.createElement("td");
-    tdBr.appendChild(badgeCell(row.counts));
+    // Add four separate columns for each badge count
+    const tdGoat = document.createElement("td");
+    tdGoat.textContent = row.counts?.goat ?? 0;
 
-    tr.append(tdRank, tdRoll, tdNorm, tdBr);
+    const tdDiamond = document.createElement("td");
+    tdDiamond.textContent = row.counts?.diamond ?? 0;
+
+    const tdGold = document.createElement("td");
+    tdGold.textContent = row.counts?.gold ?? 0;
+
+    const tdSilver = document.createElement("td");
+    tdSilver.textContent = row.counts?.silver ?? 0;
+
+    tr.append(tdRank, tdRoll, tdNorm, tdGoat, tdDiamond, tdGold, tdSilver);
     tbody.appendChild(tr);
   });
 }

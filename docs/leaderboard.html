@@ -55,7 +55,10 @@
         .muted {
             color: #fff;
             opacity: .85;
-            font-size: .95rem;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .controls {
@@ -77,8 +80,8 @@
         }
 
         .badge img {
-            width: 20px;
-            height: 20px;
+            width: 40px;
+            height: 40px;
             display: block;
         }
 
@@ -140,7 +143,10 @@
                     <th>#</th>
                     <th>Roll class</th>
                     <th class="right" title="(goat=3, diamond=2, gold=1, silver=0) ÷ students">Norm points</th>
-                    <th>Breakdown</th>
+                    <th title="Goat"><img src="assets/trend/goldenGoat.svg" alt="Goat" style="width:64px;height:64px;vertical-align:middle;"></th>
+                    <th title="Diamond"><img src="assets/trend/diamond.svg" alt="Diamond" style="width:64px;height:64px;vertical-align:middle;"></th>
+                    <th title="Gold"><img src="assets/trend/gold.svg" alt="Gold" style="width:64px;height:64px;vertical-align:middle;"></th>
+                    <th title="Silver"><img src="assets/trend/silver.svg" alt="Silver" style="width:64px;height:64px;vertical-align:middle;"></th>
                 </tr>
             </thead>
 
@@ -151,10 +157,10 @@
     <fieldset>
         <legend>Legend</legend>
         <div class="muted">
-            <span class="badge"><img src="assets/trend/goldenGoat.svg" alt="goat">Goat(3)</span>
-            <span class="badge"><img src="assets/trend/diamond.svg" alt="diamond">Diamond(2)</span>
-            <span class="badge"><img src="assets/trend/gold.svg" alt="gold">Gold(1)</span>
-            <span class="badge"><img src="assets/trend/silver.svg" alt="silver">Silver(0)</span>
+            <span class="badge"><img src="assets/trend/goldenGoat.svg" alt="goat">Goat (300 points)</span>
+            <span class="badge"><img src="assets/trend/diamond.svg" alt="diamond">Diamond (200 points)</span>
+            <span class="badge"><img src="assets/trend/gold.svg" alt="gold">Gold (100 points)</span>
+            <span class="badge"><img src="assets/trend/silver.svg" alt="silver">Silver (0 points)</span>
         </div>
     </fieldset>
 </body>
