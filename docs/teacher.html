@@ -298,7 +298,8 @@
         <fieldset>
             <legend>Sign in</legend>
 
-            <form id="authForm" method="post" action="#" autocomplete="on" novalidate>
+            <form id="authForm" autocomplete="on" novalidate onsubmit="return false">
+
                 <label for="email">Email</label><br />
                 <input id="email" name="email" type="email" inputmode="email" autocapitalize="none" spellcheck="false"
                     autocomplete="username" required /><br /><br />

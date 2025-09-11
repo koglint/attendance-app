@@ -1,7 +1,13 @@
+
+
+// Block native submit immediately (runs before Firebase init)
+document.addEventListener('submit', (e) => {
+  if (e.target && e.target.id === 'authForm') e.preventDefault();
+}, true); // capture phase
+
 // ==== CONFIG ====
 const BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com";
 let showWeeks = false;
-
 
 // ====== UI refs ======
 const els = {
@@ -98,35 +104,35 @@ function formatUploadedAt(uploadedAt) {
 
     els.signOutBtn.addEventListener("click", () => auth.signOut());
 
-    // 3) Wire sign-in ONLY after auth exists
-    if (els.authForm) {
-      els.authForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        setMsg(els.authMsg, "Signing in...");
-        try {
-          const email = els.email.value.trim();
-          const password = els.password.value;
-          await auth.signInWithEmailAndPassword(email, password);
-          setMsg(els.authMsg, "Signed in", "ok");
-        } catch (err) {
-  console.error("[auth] signIn error:");
-  setMsg(els.authMsg, "Sign-in failed. Check your credentials.", "error");
-}
-
-      });
-    } else if (els.signInBtn) {
-      els.signInBtn.addEventListener("click", async () => {
-        setMsg(els.authMsg, "Signing in...");
-        try {
-          await auth.signInWithEmailAndPassword(els.email.value.trim(), els.password.value);
-          setMsg(els.authMsg, "Signed in", "ok");
-        } catch (err) {
-  console.error("[auth] signIn error:");
-  setMsg(els.authMsg, "Sign-in failed. Check your credentials.", "error");
-}
-
-      });
+  // 3) Wire sign-in ONLY after auth exists
+if (els.authForm) {
+  els.authForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    setMsg(els.authMsg, "Signing in...");
+    try {
+      const email = els.email.value.trim();
+      const password = els.password.value;
+      // fetch auth on demand so this works even if init was slow
+      const ready = await (window.firebaseReady || Promise.reject(new Error("firebaseReady missing")));
+      const authNow = ready.auth || window.firebaseAuth;
+      await authNow.signInWithEmailAndPassword(email, password);
+      setMsg(els.authMsg, "Signed in", "ok");
+    } catch (err) {
+      console.error("[auth] signIn error:", err);
+      setMsg(els.authMsg, "Sign-in failed. Check your credentials.", "error");
     }
+  });
+}
+
+// Always attach the click handler (not else-if)
+if (els.signInBtn) {
+  els.signInBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    // funnel everything through the submit handler
+    els.authForm?.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+  });
+}
+ 
 
     // 4) Non-auth UI events are safe to wire now too
     els.refreshBtn.addEventListener("click", populateTerms);
