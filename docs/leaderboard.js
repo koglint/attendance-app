@@ -93,6 +93,9 @@ function renderLeaderboard(weeks, list) {
   list.forEach((row, idx) => {
     const tr = document.createElement("tr");
 
+    // Add the glow class to the top row
+    if (idx === 0) tr.classList.add("top-glow");
+
     const tdRank = document.createElement("td");
     tdRank.textContent = String(idx + 1);
 
@@ -103,7 +106,6 @@ function renderLeaderboard(weeks, list) {
     tdNorm.className = "right";
     tdNorm.textContent = (Number(row.normPoints * 1000 ?? 0)).toFixed(0);
 
-    // Add four separate columns for each badge count
     const tdGoat = document.createElement("td");
     tdGoat.textContent = row.counts?.goat ?? 0;
 
