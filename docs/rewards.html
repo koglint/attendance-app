@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <base href="./" />
+    <title>Rewards — Attendance</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            margin: 1rem 2rem;
+            background-color: #274472;
+            color: #ffffff;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        fieldset {
+            border: 1px solid #e7f802;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        .muted {
+            color: #ffffff;
+            font-size: 0.9rem;
+        }
+
+        .ok {
+            color: #0a7a0a;
+        }
+
+        .err {
+            color: #b00020;
+        }
+
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th,
+        td {
+            border-bottom: 1px solid #e7f802;
+            padding: 8px;
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        th {
+            background: #274472;
+            position: sticky;
+            top: 0;
+        }
+
+        tr {
+            border-bottom: #e7f802 1px solid;
+        }
+
+        #onlyAuthed {
+            display: none;
+        }
+
+        /* Example reward card styling */
+        .reward-card {
+            background: #19335c;
+            border: 2px solid #e7f802;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        .reward-card img {
+            width: 72px;
+            height: 72px;
+            object-fit: contain;
+            border-radius: 8px;
+            background: #fff2;
+        }
+        .reward-info {
+            flex: 1;
+        }
+        .reward-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            margin-bottom: 0.3rem;
+        }
+        .reward-desc {
+            font-size: 1.05rem;
+        }
+    </style>
+
+    <!-- Optionally include Firebase and your rewards.js if needed -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth-compat.js"></script>
+    <script src="./firebase-init.js" defer></script>
+    <script type="module" src="./rewards.js"></script>
+</head>
+
+<body>
+    <header>
+        <h1>Rewards</h1>
+        <nav>
+            <a href="teacher.html" style="color:#e7f802; text-decoration:underline; font-size:1rem;">← Back to Teacher View</a>
+        </nav>
+    </header>
+
+    <section id="onlyAuthed">
+        <fieldset>
+            <legend>Available Rewards</legend>
+            <div id="rewardsList">
+                <!-- Rewards will be dynamically loaded here by rewards.js -->
+                <!-- Example static card: -->
+                <!--
+                <div class="reward-card">
+                    <img src="assets/rewards/star.png" alt="Star Badge" />
+                    <div class="reward-info">
+                        <div class="reward-title">Star Badge</div>
+                        <div class="reward-desc">Awarded for perfect attendance in a fortnight.</div>
+                    </div>
+                </div>
+                -->
+            </div>

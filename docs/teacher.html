@@ -31,6 +31,13 @@
             cursor: pointer;
         }
 
+        button[disabled] {
+            opacity: 0.6;
+            cursor: not-allowed;
+            filter: grayscale(0.2);
+        }
+
+
         .muted {
             color: #ffffff;
             font-size: 0.9rem;
@@ -298,7 +305,7 @@
         <fieldset>
             <legend>Sign in</legend>
 
-            <form id="authForm" autocomplete="on" novalidate onsubmit="return false">
+            <form id="authForm" autocomplete="on" novalidate>
 
                 <label for="email">Email</label><br />
                 <input id="email" name="email" type="email" inputmode="email" autocapitalize="none" spellcheck="false"
@@ -307,7 +314,10 @@
                 <label for="password">Password</label><br />
                 <input id="password" name="password" type="password" autocomplete="current-password" required /><br /><br />
             
-                <button id="signInBtn" type="submit">Sign in</button>
+                <button id="signInBtn" type="submit" disabled aria-disabled="true" title="Initialising auth…">
+                    Sign in
+                </button>
+
             </form>
 
 
@@ -319,12 +329,23 @@
     <!-- Main content -->
     <section id="onlyAuthed">
 
-    <!-- Leaderboard Button -->
-    <div style="margin-bottom: 1rem;">
+    <!-- Leaderboard and Rewards Buttons -->
+    <div style="margin-bottom: 1rem; display: flex; gap: 1rem;">
         <button type="button" onclick="window.location.href='leaderboard.html'">
             View Leaderboard
         </button>
+        <button type="button" onclick="handleRewardsClick()">
+            View Rewards
+        </button>
     </div>
+
+    <script>
+    function handleRewardsClick() {
+        if (window.confirm("Ensure you are not projecting your screen to the class")) {
+            window.location.href = 'rewards.html';
+        }
+    }
+    </script>
 
 <fieldset>
     <legend>Choose term & class</legend>

@@ -1,9 +1,6 @@
 
 
-// Block native submit immediately (runs before Firebase init)
-document.addEventListener('submit', (e) => {
-  if (e.target && e.target.id === 'authForm') e.preventDefault();
-}, true); // capture phase
+
 
 // ==== CONFIG ====
 const BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com";
@@ -37,6 +34,25 @@ const els = {
   toggleWeeks: document.getElementById("toggleWeeks"),
   compactGrid: document.getElementById("compactGrid"),
 };
+
+function setSignInEnabled(on) {
+  if (!els.signInBtn) return;
+  els.signInBtn.disabled = !on;
+  els.signInBtn.setAttribute("aria-disabled", String(!on));
+  els.signInBtn.title = on ? "" : "Initialising auth…";
+}
+
+setSignInEnabled(false);
+setMsg(els.authMsg, "Initialising auth…");
+
+// Block submits while auth isn't ready (e.g., user presses Enter)
+els.authForm?.addEventListener("submit", (e) => {
+  if (els.signInBtn?.disabled) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}, true);
+
 
 
 function setMsg(el, text, kind="info") {
@@ -128,9 +144,10 @@ if (els.authForm) {
 if (els.signInBtn) {
   els.signInBtn.addEventListener("click", (e) => {
     e.preventDefault();
-    // funnel everything through the submit handler
-    els.authForm?.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    if (els.authForm?.requestSubmit) els.authForm.requestSubmit();
+    else els.authForm?.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
   });
+
 }
  
 
@@ -144,6 +161,11 @@ if (els.signInBtn) {
         applyWeekVisibility();
       });
     }
+
+    setSignInEnabled(true);
+    setMsg(els.authMsg, "");
+
+
   } catch (e) {
     console.error("[boot] init failed:", e);
     setMsg(els.authMsg, "Auth not initialized — check console", "error");
