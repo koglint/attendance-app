@@ -12,14 +12,11 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Create firebase-config.js (from secrets)
+      - name: Create firebase-config.js (temporary, not committed)
         run: |
-          mkdir -p docs
-          cat > docs/firebase-config.js <<'EOC'
-          // Generated at deploy time by GitHub Actions — not stored in repo.
+          cat > firebase-config.js <<'EOC'
+          // Generated at deploy time — not stored in repo.
           window.firebaseConfig = {
             apiKey: "${{ secrets.FB_API_KEY }}",
             authDomain: "${{ secrets.FB_AUTH_DOMAIN }}",
@@ -31,17 +28,15 @@ jobs:
           };
           EOC
 
-      # Optional build step if you have one (uncomment & adapt)
-      # - name: Build site
-      #   run: npm ci && npm run build
-      #   env:
-      #     CI: true
+      - name: Copy firebase-config.js into build dir
+        run: cp firebase-config.js docs/firebase-config.js
 
-      - name: Deploy to gh-pages
+      - name: Deploy to GitHub Pages (no commit of firebase-config.js)
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs
           publish_branch: gh-pages
+          keep_files: false
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'
