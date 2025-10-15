@@ -1,5 +1,5 @@
 // ==== CONFIG ====
-const BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com"; // your Render URL
+const BACKEND_BASE_URL = window.BACKEND_BASE_URL || "https://attendance-app-lfwc.onrender.com";
 
 // ====== UI wiring ======
 const els = {
