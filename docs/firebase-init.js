@@ -1,38 +1,17 @@
-// firebase-init.js
-// Uses compat SDKs already loaded on the page.
-// Fetches Firebase Web config from your backend (served from Step 4).
-
+// firebase-init.js — expects window.firebaseConfig injected at deploy time
 (function () {
-  const API_BASE = "https://attendance-app-lfwc.onrender.com";
-
-  async function loadConfig() {
-    const res = await fetch(`${API_BASE}/public/firebase-config`, {
-      // config is public; no creds needed
-      credentials: "omit",
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      throw new Error(`Failed to load Firebase config: ${res.status} ${res.statusText}`);
-    }
-    return res.json();
-  }
-
-  // Expose a promise the rest of the app can await
   window.firebaseReady = (async () => {
     if (!window.firebase || !firebase.initializeApp) {
-      throw new Error("Firebase compat SDK not loaded (firebase-app-compat.js).");
+      throw new Error("Firebase compat SDK not loaded.");
     }
-    const cfg = await loadConfig();
-    window.firebaseConfig = cfg;
-
+    const cfg = window.firebaseConfig;
+    if (!cfg) throw new Error("window.firebaseConfig missing — did CI inject it?");
     const app = firebase.initializeApp(cfg);
+    const auth = firebase.auth();
     window.firebaseApp = app;
-    window.firebaseAuth = firebase.auth();
-
-    // Optional: Fire a DOM event others can hook if they prefer events
+    window.firebaseAuth = auth;
     document.dispatchEvent(new CustomEvent("firebase-ready"));
-
-    return { app, auth: window.firebaseAuth };
+    return { app, auth };
   })().catch((e) => {
     console.error("[firebase-init] init failed:", e);
     window.firebaseInitError = e;
