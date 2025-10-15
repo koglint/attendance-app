@@ -1,0 +1,47 @@
+name: Build & Deploy Pages (inject firebase config)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create firebase-config.js (from secrets)
+        run: |
+          mkdir -p docs
+          cat > docs/firebase-config.js <<'EOC'
+          // Generated at deploy time by GitHub Actions — not stored in repo.
+          window.firebaseConfig = {
+            apiKey: "${{ secrets.FB_API_KEY }}",
+            authDomain: "${{ secrets.FB_AUTH_DOMAIN }}",
+            projectId: "${{ secrets.FB_PROJECT_ID }}",
+            appId: "${{ secrets.FB_APP_ID }}",
+            storageBucket: "${{ secrets.FB_STORAGE_BUCKET }}",
+            messagingSenderId: "${{ secrets.FB_MESSAGING_SENDER_ID }}",
+            measurementId: "${{ secrets.FB_MEASUREMENT_ID }}"
+          };
+          EOC
+
+      # Optional build step if you have one (uncomment & adapt)
+      # - name: Build site
+      #   run: npm ci && npm run build
+      #   env:
+      #     CI: true
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          publish_branch: gh-pages
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
