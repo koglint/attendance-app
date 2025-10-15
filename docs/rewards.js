@@ -1,6 +1,6 @@
 // rewards.js
 
-const BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com";
+const BACKEND_BASE_URL = (window.BACKEND_BASE_URL || "https://attendance-app-lfwc.onrender.com");
 const SCHOOL_ID = "warilla-hs"; // ← this is the doc id shown in your screenshot
 
 
