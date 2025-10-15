@@ -143,7 +143,17 @@ let IS_ADMIN = false;
 
 // ★ Wrap all event wiring in a single async bootstrap so we only touch auth after it's ready
 (async function bootstrap() {
+  await (window.firebaseReady || Promise.resolve());
+
   await Auth.ready();
+
+  // Enable sign-in once Firebase is ready
+    if (els.signInBtn) {
+      els.signInBtn.disabled = false;
+      els.signInBtn.removeAttribute("aria-disabled");
+      els.signInBtn.title = "Sign in";
+    }
+
 
   // ====== Roster Upload ======
   els.uploadRosterBtn?.addEventListener("click", async () => {
