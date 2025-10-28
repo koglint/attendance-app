@@ -116,7 +116,7 @@ students = await Promise.all(rows.map(async (r) => {
     // take first 3 characters of surname (or fewer if shorter), Title-case it
     let surnameFragment = "";
     if (d.surname) {
-      const s = d.surname.trim().slice(0, );
+      const s = d.surname.trim().slice(0,2);
       surnameFragment = s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() + '.';
     }
 
