@@ -108,14 +108,22 @@ students = await Promise.all(rows.map(async (r) => {
     .doc(docId)
     .get();
 
-    let name = String(r.externalId); // fallback
-    if (snap.exists) {
-      const d = snap.data() || {};
-      const first = d.givenNames ? d.givenNames.trim().split(" ")[0] : ""; // first name only
-      const lastInitial = d.surname ? d.surname.trim().charAt(0).toUpperCase() + "." : "";
-      if (first) name = `${first} ${lastInitial}`.trim();
+  let name = String(r.externalId); // fallback
+  if (snap.exists) {
+    const d = snap.data() || {};
+    const first = d.givenNames ? d.givenNames.trim().split(" ")[0] : ""; // first name only
+
+    // take first 3 characters of surname (or fewer if shorter), Title-case it
+    let surnameFragment = "";
+    if (d.surname) {
+      const s = d.surname.trim().slice(0, );
+      surnameFragment = s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() + '.';
     }
 
+    if (first && surnameFragment) name = `${first} ${surnameFragment}`.trim();
+    else if (first) name = first;
+    else if (surnameFragment) name = surnameFragment;
+  }
 
   return { id: r.externalId, name };
 }));
