@@ -17,10 +17,10 @@ let ctx = els.wheelCanvas.getContext("2d");
 let spinning = false;
 
 const tierWeights = {
-  goat: 4,
-  diamond: 3,
-  gold: 2,
-  silver: 1,
+  goat: 10,
+  diamond: 10,
+  gold: 3,
+  silver: 0.5,
 };
 
 function weightedRandomIndex(weights) {
@@ -55,6 +55,11 @@ function drawWheel(students) {
     ctx.restore();
   });
 }
+
+
+
+
+
 
 async function authedFetch(path, init = {}) {
   const ready = await (window.firebaseReady || Promise.reject("firebaseReady missing"));
@@ -131,6 +136,7 @@ students = await Promise.all(rows.map(async (r) => {
 
   tierMap = new Map(rows.map(r => [r.externalId, r.trend ?? "silver"]));
   drawWheel(students);
+
 }
 
 function spinWheel() {
@@ -165,6 +171,8 @@ function spinWheel() {
     drawWheel(students);
     ctx.restore();
 
+
+
     if (progress < 1) requestAnimationFrame(animate);
     else {
       els.winnerDisplay.textContent = `🎉 Winner: ${winner.name} 🎉`;
@@ -174,6 +182,69 @@ function spinWheel() {
 
   requestAnimationFrame(animate);
 }
+
+async function testFairness(n = 10000) {
+  if (!students || students.length === 0) {
+    console.warn("⚠️ No students loaded yet. Load a roll class first.");
+    return;
+  }
+
+  const counts = new Map();
+  for (let i = 0; i < n; i++) {
+    const weights = students.map(s => tierWeights[tierMap.get(s.id)] || 1);
+    const winnerIndex = weightedRandomIndex(weights);
+    const name = students[winnerIndex].name;
+    counts.set(name, (counts.get(name) || 0) + 1);
+  }
+
+  // Compute results
+  const totalWeight = students.reduce(
+    (sum, s) => sum + (tierWeights[tierMap.get(s.id)] || 1),
+    0
+  );
+
+  const results = students.map(s => {
+    const tier = tierMap.get(s.id);
+    const weight = tierWeights[tier] || 1;
+    const expectedProb = (weight / totalWeight) * 100;
+    const count = counts.get(s.name) || 0;
+    const observedProb = (count / n) * 100;
+    const diff = observedProb - expectedProb;
+    return {
+      Name: s.name,
+      Tier: tier,
+      Weight: weight,
+      "Expected %": expectedProb.toFixed(2),
+      "Observed %": observedProb.toFixed(2),
+      "Difference %": diff.toFixed(2),
+      Count: count
+    };
+  });
+
+  // Console display (pretty)
+  console.table(results);
+
+  // Also output CSV string for Excel
+  const csvHeader = Object.keys(results[0]).join(",") + "\n";
+  const csvRows = results.map(r => Object.values(r).join(",")).join("\n");
+  const csv = csvHeader + csvRows;
+  console.log("📋 Copy the following CSV data for Excel:\n\n" + csv);
+
+
+
+  return results;
+}
+
+
+// Expose key variables for debugging from the console
+window.students = students;
+window.tierMap = tierMap;
+window.tierWeights = tierWeights;
+window.weightedRandomIndex = weightedRandomIndex;
+window.testFairness = testFairness;
+
+
+
 
 (async function init() {
   try {
