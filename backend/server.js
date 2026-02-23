@@ -1021,6 +1021,7 @@ const ROSTER_HEADERS = {
     "Roll Class","RollClass","Roll class name","Rollclass name","Roll group","RollGroup",
     "Class","Homegroup","Rollclass"
   ],
+  alias: ["Alias","alias","Student Alias","StudentAlias","Pseudonym","Nickname"],
 };
 
 app.post("/api/roster/upload", requireAuth("admin"), upload.single("file"), async (req, res) => {
@@ -1035,11 +1036,13 @@ app.post("/api/roster/upload", requireAuth("admin"), upload.single("file"), asyn
 
     // Header detection
     const headers = Object.keys(rows[0]);
-    const hId   = findHeader(headers, ROSTER_HEADERS.studentId);
-    const hMail = findHeader(headers, ROSTER_HEADERS.email);
-    const hSur  = findHeader(headers, ROSTER_HEADERS.surname);
-    const hGiven= findHeader(headers, ROSTER_HEADERS.givenNames);
-    const hRC   = findHeader(headers, ROSTER_HEADERS.rollClass);
+    const hId    = findHeader(headers, ROSTER_HEADERS.studentId);
+    const hMail  = findHeader(headers, ROSTER_HEADERS.email);
+    const hSur   = findHeader(headers, ROSTER_HEADERS.surname);
+    const hGiven = findHeader(headers, ROSTER_HEADERS.givenNames);
+    const hRC    = findHeader(headers, ROSTER_HEADERS.rollClass);
+    const hAlias = findHeader(headers, ROSTER_HEADERS.alias); // optional
+
     if (!hId || !hMail || !hSur || !hGiven || !hRC) {
       return res.status(400).json({
         error: "missing required columns",
@@ -1086,13 +1089,23 @@ app.post("/api/roster/upload", requireAuth("admin"), upload.single("file"), asyn
 
       // Upsert roster doc (merge emails)
       const rosterRef = rosterColl.doc(docId);
-      batch.set(rosterRef, {
+
+      // Optional alias (do NOT overwrite an existing alias unless a non-empty alias is provided)
+      const aliasRaw = hAlias ? String(r[hAlias] ?? "").trim() : "";
+      const rosterPayload = {
         surname,
         givenNames: given,
         rollClass,
         emails,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
+      };
+
+      // Only set alias if the CSV actually includes the alias column AND the cell is non-empty
+      if (hAlias && aliasRaw) {
+        rosterPayload.alias = aliasRaw;
+      }
+
+      batch.set(rosterRef, rosterPayload, { merge: true });
       writtenRoster++; inBatch++;
 
       // Build email_lookup documents
