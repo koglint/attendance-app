@@ -995,16 +995,37 @@ app.get("/api/terms/:year/:term/classes/:rollClass/rollup", requireAuth("teacher
       });
     }
 
+    // ---- Join roster aliases (doc id = externalId with / replaced) ----
+    const ids = Array.from(byStudent.keys()).map(id => String(id));
+    const aliasById = new Map();
+
+    if (ids.length) {
+      const refs = ids.map(id => {
+        const docId = String(id).replace(/\//g, "_");
+        return db.collection("schools").doc(SCHOOL_ID).collection("roster").doc(docId);
+      });
+
+      // Firestore Admin SDK supports getAll(...refs)
+      const snaps = await db.getAll(...refs);
+      snaps.forEach((docSnap, idx) => {
+        const id = ids[idx];
+        const alias = docSnap.exists ? (docSnap.get("alias") ?? null) : null;
+        if (alias) aliasById.set(String(id), String(alias));
+      });
+    }
+
     const rows = Array.from(byStudent.values())
-      .sort((a, b) => String(a.externalId).localeCompare(String(b.externalId)))
       .map(s => ({
         externalId: s.externalId,
+        alias: aliasById.get(String(s.externalId)) ?? null,
         avatar: null,     // placeholder for future image URL
         trend: null,      // placeholder for future badge
         weekValues: weeks.map(w => (s.weeks[w] ?? null))
       }));
 
     res.json({ year, term, rollClass, weeks, rows });
+
+
   } catch (e) {
     console.error("term rollup failed:", e);
     res.status(500).json({ error: "failed to build rollup" });
