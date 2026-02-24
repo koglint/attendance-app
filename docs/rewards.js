@@ -112,7 +112,7 @@ async function loadStudents(rollClass) {
   });
 
 
-  tierMap = new Map(rows.map(r => [r.externalId, r.trend ?? "silver"]));
+  tierMap = new Map(rows.map(r => [String(r.externalId), r.trend ?? "silver"]));
   drawWheel(students);
 
 }
@@ -214,9 +214,9 @@ async function testFairness(n = 10000) {
 }
 
 
-// Expose key variables for debugging from the console
-window.students = students;
-window.tierMap = tierMap;
+// Expose key variables for debugging from the console (always current)
+Object.defineProperty(window, "students", { get: () => students });
+Object.defineProperty(window, "tierMap",   { get: () => tierMap });
 window.tierWeights = tierWeights;
 window.weightedRandomIndex = weightedRandomIndex;
 window.testFairness = testFairness;
