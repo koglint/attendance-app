@@ -205,6 +205,12 @@ async function authedFetch(path, init = {}) {
 }
 
 
+function displayLabelForRow(r) {
+  const a = (r && typeof r.alias === "string") ? r.alias.trim() : "";
+  if (a) return a;
+  // fallback: still show externalId if no alias
+  return r?.externalId ?? "";
+}
 
 
 // ====== Term & class loading ======
@@ -402,7 +408,7 @@ function buildMiniTable(rowsSubset, trendMap) {
     const tr = document.createElement("tr");
 
     const tdId = document.createElement("td");
-    tdId.textContent = r.externalId ?? "";
+    tdId.textContent = displayLabelForRow(r);
 
     //const tdAv = document.createElement("td");
     //tdAv.textContent = ""; // reserved for avatars later
@@ -520,7 +526,7 @@ if (trendFrom == null || trendTo == null) {
         tdTr.classList.add("trend-cell");   // ← add this line
 
 
-        tdId.textContent = r.externalId ?? "";
+        tdId.textContent = displayLabelForRow(r);        
         //tdAv.textContent = ""; // avatar later
                 
         const info = trendMap.get(String(r.externalId)) || null;

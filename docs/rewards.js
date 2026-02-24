@@ -103,35 +103,13 @@ async function loadStudents(rollClass) {
   const resp = await authedFetch(`/api/snapshots/latest/classes/${encRC}/rows`);
   const rows = await resp.json();
 
-const db = firebase.firestore();
-students = await Promise.all(rows.map(async (r) => {
-  const docId = String(r.externalId).replace(/\//g, "_");
-  const snap = await db
-    .collection("schools")
-    .doc(SCHOOL_ID)
-    .collection("roster")
-    .doc(docId)
-    .get();
-
-  let name = String(r.externalId); // fallback
-  if (snap.exists) {
-    const d = snap.data() || {};
-    const first = d.givenNames ? d.givenNames.trim().split(" ")[0] : ""; // first name only
-
-    // take first 3 characters of surname (or fewer if shorter), Title-case it
-    let surnameFragment = "";
-    if (d.surname) {
-      const s = d.surname.trim().slice(0,2);
-      surnameFragment = s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() + '.';
-    }
-
-    if (first && surnameFragment) name = `${first} ${surnameFragment}`.trim();
-    else if (first) name = first;
-    else if (surnameFragment) name = surnameFragment;
-  }
-
-  return { id: r.externalId, name };
-}));
+  students = rows.map(r => {
+    const alias = (typeof r.alias === "string") ? r.alias.trim() : "";
+    return {
+      id: String(r.externalId),
+      name: alias || String(r.externalId), // display label on wheel
+    };
+  });
 
 
   tierMap = new Map(rows.map(r => [r.externalId, r.trend ?? "silver"]));

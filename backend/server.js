@@ -176,7 +176,26 @@ function findHeader(headers, candidates) {
 }
 const clamp01 = n => Math.max(0, Math.min(100, n));
 
-// here comes the change
+// --- Join roster aliases for a list of externalIds (doc id = externalId with / replaced) ---
+async function fetchAliasMapForIds(ids) {
+  const clean = Array.from(new Set((ids || []).map(id => String(id)).filter(Boolean)));
+  const map = new Map();
+  if (!clean.length) return map;
+
+  const refs = clean.map(id => {
+    const docId = id.replace(/\//g, "_");
+    return db.collection("schools").doc(SCHOOL_ID).collection("roster").doc(docId);
+  });
+
+  const snaps = await db.getAll(...refs);
+  snaps.forEach((docSnap, idx) => {
+    const id = clean[idx];
+    const alias = docSnap.exists ? (docSnap.get("alias") ?? null) : null;
+    if (alias) map.set(id, String(alias));
+  });
+
+  return map; // Map<externalId, alias>
+}
 
 // === Returns the latest and second-latest snapshot refs for a given year/term ===
 async function getTopTwoSnapshotRefs(schoolRef, year, term) {
@@ -830,7 +849,8 @@ app.get("/api/snapshots/latest/classes", requireAuth("teacher"), async (req, res
   }
 });
 
-// GET all rows for a class in latest snapshot (externalId + pctAttendance only)
+
+
 app.get("/api/snapshots/latest/classes/:rollClass/rows", requireAuth("teacher"), async (req, res) => {
   const { rollClass } = req.params;
   try {
@@ -843,11 +863,20 @@ app.get("/api/snapshots/latest/classes/:rollClass/rows", requireAuth("teacher"),
       .collection("rows");
 
     const qs = await rowsRef.where("rollClass", "==", rollClass).get();
-    const data = qs.docs.map(d => ({
-    externalId: d.get("externalId"),
-    pctAttendance: d.get("pctAttendance"),
-    trend: d.get("trend") ?? null,
-    trendMeta: d.get("trendMeta") ?? null, // ← ADD
+
+    const rows = qs.docs.map(d => ({
+      externalId: d.get("externalId"),
+      pctAttendance: d.get("pctAttendance"),
+      trend: d.get("trend") ?? null,
+      trendMeta: d.get("trendMeta") ?? null,
+    }));
+
+    // Join aliases from roster
+    const aliasById = await fetchAliasMapForIds(rows.map(r => r.externalId));
+
+    const data = rows.map(r => ({
+      ...r,
+      alias: aliasById.get(String(r.externalId)) ?? null,
     }));
 
     res.json(data);
