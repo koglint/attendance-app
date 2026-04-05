@@ -267,7 +267,9 @@ Auth.onChange(async (user) => {
         return;
       }
 
-      const uploadMsg = data?.week
+      const uploadMsg = Array.isArray(data?.weeksProcessed) && data.weeksProcessed.length
+        ? `Upload complete. Processed ${data.weeksProcessed.length} week${data.weeksProcessed.length === 1 ? "" : "s"}.`
+        : data?.week
         ? `Upload complete. Saved as ${data.label || `Week ${data.week}`}.`
         : "Upload complete";
       setMsg(els.uploadMsg, uploadMsg, "ok");

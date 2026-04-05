@@ -662,18 +662,9 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
     if (!inferredWeeks.size) {
       return res.status(400).json({ error: "could not infer school week from report dates" });
     }
-    if (inferredWeeks.size > 1) {
-      return res.status(400).json({
-        error: "report spans multiple school weeks; upload one weekly report at a time",
-        inferredWeeks: Array.from(inferredWeeks.values()),
-      });
-    }
-
-    const [{ year, term, week, label }] = Array.from(inferredWeeks.values());
-    const windows = getWeekWindowDates(year, term, week);
-    if (!windows || !windows.current.length) {
-      return res.status(400).json({ error: "inferred week is outside the configured term bounds" });
-    }
+    const inferredWeekList = Array.from(inferredWeeks.values()).sort((a, b) =>
+      (a.year - b.year) || (a.term - b.term) || (a.week - b.week)
+    );
 
     // Checksums (info/diagnostics)
     const contentChecksum = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
@@ -681,7 +672,7 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
       .createHash("sha256")
       .update(req.file.buffer)
       .update("|")
-      .update(label)
+      .update(inferredWeekList.map((item) => item.label).join("|"))
       .digest("hex");
 
     const schoolRef = db.collection("schools").doc(SCHOOL_ID);
@@ -698,36 +689,71 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
       uploadedBy: req.user.uid,
       rowCount: records.length,
       status: "processing",
-      year,
-      term,
-      week,
-      label,
+      inferredWeeks: inferredWeekList,
       sourceType: parsedUpload.sourceType,
       sourceSheet: parsedUpload.sheetName,
       metric: "mon-thu-roll-call",
-      currentWindowDates: windows.current,
-      previousWindowDates: windows.previous,
     });
 
-    // Find existing snapshot by (year, term, week)
-    const existingSnapQS = await snapsColl
-      .where("year", "==", year)
-      .where("term", "==", term)
-      .where("week", "==", week)
-      .limit(1)
-      .get();
+    const rosterById = await fetchRosterStudentMap(schoolRef);
+    if (!rosterById.size) {
+      return res.status(400).json({ error: "roster is empty; upload roster data before attendance reports" });
+    }
 
-    let snapshotRef;
-    let reusedExisting = false;
+    function ensureDateSet(map, externalId) {
+      const key = String(externalId).trim().replace(/\//g, "_");
+      if (!map.has(key)) map.set(key, new Set());
+      return map.get(key);
+    }
+    const perWeekResults = [];
+    let totalWritten = 0;
+    let totalAcceptedRows = 0;
+    let totalIgnoredRows = 0;
+    let latestSnapshotId = null;
+    const touchedTerms = new Map();
 
-    if (!existingSnapQS.empty) {
-      // OVERWRITE path: reuse the existing snapshot doc for this label
-      snapshotRef = existingSnapQS.docs[0].ref;
-      reusedExisting = true;
+    for (const { year, term, week, label } of inferredWeekList) {
+      const windows = getWeekWindowDates(year, term, week);
+      if (!windows || !windows.current.length) continue;
 
-      // Ensure snapshot doc carries current metadata (in case label changed casing etc.)
-      await snapshotRef.set(
-        {
+      const existingSnapQS = await snapsColl
+        .where("year", "==", year)
+        .where("term", "==", term)
+        .where("week", "==", week)
+        .limit(1)
+        .get();
+
+      let snapshotRef;
+      let reusedExisting = false;
+
+      if (!existingSnapQS.empty) {
+        snapshotRef = existingSnapQS.docs[0].ref;
+        reusedExisting = true;
+        await snapshotRef.set(
+          {
+            uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
+            uploadId: uploadRef.id,
+            isLatest: false,
+            year,
+            term,
+            week,
+            label,
+            metric: "mon-thu-roll-call",
+          },
+          { merge: true }
+        );
+
+        const rowsColl = snapshotRef.collection("rows");
+        while (true) {
+          const toDelete = await rowsColl.limit(500).get();
+          if (toDelete.empty) break;
+          const batch = db.batch();
+          toDelete.docs.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+        }
+      } else {
+        snapshotRef = snapsColl.doc();
+        await snapshotRef.set({
           uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
           uploadId: uploadRef.id,
           isLatest: false,
@@ -736,216 +762,198 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
           week,
           label,
           metric: "mon-thu-roll-call",
+        });
+      }
+
+      const classSet = new Set();
+      const currentDateSet = new Set(windows.current);
+      const previousDateSet = new Set(windows.previous);
+      const currentLateById = new Map();
+      const previousLateById = new Map();
+      const reportRollClassById = new Map();
+      let acceptedRows = 0;
+      let ignoredRows = 0;
+
+      for (const row of records) {
+        const externalId = String(row[hExternal] ?? "").trim().replace(/\//g, "_");
+        const rollClass = String(row[hClass] ?? "").trim();
+        const date = normalizeReportDate(row[hDate]);
+
+        if (!externalId || !rollClass || !date) {
+          ignoredRows++;
+          continue;
+        }
+        if (!isSupportedRollClass(rollClass)) {
+          ignoredRows++;
+          continue;
+        }
+        if (!isRollCallMiss(row[hShorthand], row[hDescription], row[hTime])) {
+          ignoredRows++;
+          continue;
+        }
+
+        if (currentDateSet.has(date)) {
+          ensureDateSet(currentLateById, externalId).add(date);
+          reportRollClassById.set(externalId, rollClass);
+          classSet.add(rollClass);
+          acceptedRows++;
+          continue;
+        }
+
+        if (previousDateSet.has(date)) {
+          ensureDateSet(previousLateById, externalId).add(date);
+          reportRollClassById.set(externalId, rollClass);
+          classSet.add(rollClass);
+          acceptedRows++;
+          continue;
+        }
+
+        ignoredRows++;
+      }
+
+      const studentUniverse = new Map();
+      for (const [externalId, student] of rosterById.entries()) {
+        if (isSupportedRollClass(student?.rollClass)) {
+          studentUniverse.set(externalId, student);
+        }
+      }
+      for (const [externalId, rollClass] of reportRollClassById.entries()) {
+        if (!studentUniverse.has(externalId)) {
+          studentUniverse.set(externalId, {
+            externalId,
+            rollClass: rollClass || null,
+            firstName: null,
+            surname: null,
+          });
+        }
+      }
+
+      const currentWindowDays = windows.current.length;
+      const previousWindowDays = windows.previous.length;
+
+      const rowsColl = snapshotRef.collection("rows");
+      let batch = db.batch();
+      let inBatch = 0;
+      let written = 0;
+
+      for (const student of studentUniverse.values()) {
+        const externalId = String(student.externalId).trim().replace(/\//g, "_");
+        const rollClass = reportRollClassById.get(externalId) || student.rollClass || "No Roll Class";
+        const currentLateDates = Array.from(currentLateById.get(externalId) || []).sort();
+        const previousLateDates = Array.from(previousLateById.get(externalId) || []).sort();
+        const currentLateDays = currentLateDates.length;
+        const previousLateDays = previousLateDates.length;
+        const daysOnTime = Math.max(0, currentWindowDays - currentLateDays);
+        const pct = currentWindowDays > 0
+          ? clamp01(((currentWindowDays - currentLateDays) / currentWindowDays) * 100)
+          : null;
+        const trend = statusFromDaysOnTime(daysOnTime, currentWindowDays);
+
+        classSet.add(rollClass);
+
+        const ref = rowsColl.doc(externalId);
+        batch.set(ref, {
+          externalId,
+          rollClass,
+          pctAttendance: pct,
+          lateDays: currentLateDays,
+          windowDays: currentWindowDays,
+          lateDates: currentLateDates,
+          trend: trend ?? null,
+          trendMeta: trend ? {
+            year,
+            term,
+            week,
+            daysOnTime,
+            lateDays: currentLateDays,
+            windowDays: currentWindowDays,
+            version: "status-v1",
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          } : null,
+          metric: "mon-thu-roll-call",
+          metricMeta: {
+            year,
+            term,
+            week,
+            currentWindowDates: windows.current,
+            previousWindowDates: windows.previous,
+            previousWindowDays,
+            previousLateDays,
+            previousPctAttendance: previousWindowDays > 0
+              ? clamp01(((previousWindowDays - previousLateDays) / previousWindowDays) * 100)
+              : null,
+          },
+        }, { merge: false });
+
+        inBatch++;
+        written++;
+        if (inBatch >= 500) {
+          await batch.commit();
+          batch = db.batch();
+          inBatch = 0;
+        }
+      }
+      if (inBatch) await batch.commit();
+
+      latestSnapshotId = snapshotRef.id;
+      touchedTerms.set(`${year}-${term}`, { year, term, snapshotRef });
+
+      await snapshotRef.set(
+        {
+          isLatest: true,
+          classList: Array.from(classSet).sort(),
+          metric: "mon-thu-roll-call",
+          metricLabel: "Mon-Thu roll-call score",
+          currentWindowDates: windows.current,
+          previousWindowDates: windows.previous,
+          currentWindowDays,
+          previousWindowDays,
         },
         { merge: true }
       );
 
-      // Delete all existing rows under this snapshot
-      const rowsColl = snapshotRef.collection("rows");
-      while (true) {
-        const toDelete = await rowsColl.limit(500).get();
-        if (toDelete.empty) break;
-        const batch = db.batch();
-        toDelete.docs.forEach((d) => batch.delete(d.ref));
-        await batch.commit();
-      }
-    } else {
-      // NEW snapshot path
-      snapshotRef = snapsColl.doc();
-      await snapshotRef.set({
-        uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
-        uploadId: uploadRef.id,
-        isLatest: false,
+      perWeekResults.push({
+        snapshotId: snapshotRef.id,
+        label,
         year,
         term,
         week,
-        label,
-        metric: "mon-thu-roll-call",
-      });
-    }
-
-    const rosterById = await fetchRosterStudentMap(schoolRef);
-    if (!rosterById.size) {
-      return res.status(400).json({ error: "roster is empty; upload roster data before attendance reports" });
-    }
-
-    const classSet = new Set();
-    const currentDateSet = new Set(windows.current);
-    const previousDateSet = new Set(windows.previous);
-    const currentLateById = new Map();
-    const previousLateById = new Map();
-    const reportRollClassById = new Map();
-    let acceptedRows = 0;
-    let ignoredRows = 0;
-
-    function ensureDateSet(map, externalId) {
-      const key = String(externalId).trim().replace(/\//g, "_");
-      if (!map.has(key)) map.set(key, new Set());
-      return map.get(key);
-    }
-
-    for (const row of records) {
-      const externalId = String(row[hExternal] ?? "").trim().replace(/\//g, "_");
-      const rollClass = String(row[hClass] ?? "").trim();
-      const date = normalizeReportDate(row[hDate]);
-
-      if (!externalId || !rollClass || !date) {
-        ignoredRows++;
-        continue;
-      }
-      if (!isSupportedRollClass(rollClass)) {
-        ignoredRows++;
-        continue;
-      }
-      if (!isRollCallMiss(row[hShorthand], row[hDescription], row[hTime])) {
-        ignoredRows++;
-        continue;
-      }
-
-      if (currentDateSet.has(date)) {
-        ensureDateSet(currentLateById, externalId).add(date);
-        reportRollClassById.set(externalId, rollClass);
-        classSet.add(rollClass);
-        acceptedRows++;
-        continue;
-      }
-
-      if (previousDateSet.has(date)) {
-        ensureDateSet(previousLateById, externalId).add(date);
-        reportRollClassById.set(externalId, rollClass);
-        classSet.add(rollClass);
-        acceptedRows++;
-        continue;
-      }
-
-      ignoredRows++;
-    }
-
-    const studentUniverse = new Map();
-    for (const [externalId, student] of rosterById.entries()) {
-      if (isSupportedRollClass(student?.rollClass)) {
-        studentUniverse.set(externalId, student);
-      }
-    }
-    for (const [externalId, rollClass] of reportRollClassById.entries()) {
-      if (!studentUniverse.has(externalId)) {
-        studentUniverse.set(externalId, {
-          externalId,
-          rollClass: rollClass || null,
-          firstName: null,
-          surname: null,
-        });
-      }
-    }
-
-    const currentWindowDays = windows.current.length;
-    const previousWindowDays = windows.previous.length;
-
-    const rowsColl = snapshotRef.collection("rows");
-    let batch = db.batch();
-    let inBatch = 0;
-    let written = 0;
-
-    for (const student of studentUniverse.values()) {
-      const externalId = String(student.externalId).trim().replace(/\//g, "_");
-      const rollClass = reportRollClassById.get(externalId) || student.rollClass || "No Roll Class";
-      const currentLateDates = Array.from(currentLateById.get(externalId) || []).sort();
-      const previousLateDates = Array.from(previousLateById.get(externalId) || []).sort();
-      const currentLateDays = currentLateDates.length;
-      const previousLateDays = previousLateDates.length;
-      const daysOnTime = Math.max(0, currentWindowDays - currentLateDays);
-      const pct = currentWindowDays > 0
-        ? clamp01(((currentWindowDays - currentLateDays) / currentWindowDays) * 100)
-        : null;
-      const trend = statusFromDaysOnTime(daysOnTime, currentWindowDays);
-
-      classSet.add(rollClass);
-
-      const ref = rowsColl.doc(externalId);
-      batch.set(ref, {
-        externalId,
-        rollClass,
-        pctAttendance: pct,
-        lateDays: currentLateDays,
-        windowDays: currentWindowDays,
-        lateDates: currentLateDates,
-        trend: trend ?? null,
-        trendMeta: trend ? {
-          year,
-          term,
-          week,
-          daysOnTime,
-          lateDays: currentLateDays,
-          windowDays: currentWindowDays,
-          version: "status-v1",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        } : null,
-        metric: "mon-thu-roll-call",
-        metricMeta: {
-          year,
-          term,
-          week,
-          currentWindowDates: windows.current,
-          previousWindowDates: windows.previous,
-          previousWindowDays,
-          previousLateDays,
-          previousPctAttendance: previousWindowDays > 0
-            ? clamp01(((previousWindowDays - previousLateDays) / previousWindowDays) * 100)
-            : null,
-        },
-      }, { merge: false });
-
-      inBatch++;
-      written++;
-      if (inBatch >= 500) {
-        await batch.commit();
-        batch = db.batch();
-        inBatch = 0;
-      }
-    }
-    if (inBatch) await batch.commit();
-
-    const { latestSnapshotId } = await recomputeLatestTrendForTerm(db, schoolRef, year, term);
-    await schoolRef.set({ latestSnapshotId: latestSnapshotId || snapshotRef.id }, { merge: true });
-    await recomputeAndStoreLeaderboardForTerm(db, SCHOOL_ID, year, term);
-
-
-
-    // Finalize
-    await snapshotRef.set(
-      {
-        isLatest: true,
-        classList: Array.from(classSet).sort(),
-        metric: "mon-thu-roll-call",
-        metricLabel: "Mon-Thu roll-call score",
+        reusedExisting,
         currentWindowDates: windows.current,
         previousWindowDates: windows.previous,
-        currentWindowDays,
-        previousWindowDays,
-      },
-      { merge: true }
-    );
+        rowCount: written,
+        acceptedRows,
+        ignoredRows,
+      });
+      totalWritten += written;
+      totalAcceptedRows += acceptedRows;
+      totalIgnoredRows += ignoredRows;
+    }
+
+    for (const { year, term, snapshotRef } of touchedTerms.values()) {
+      const latestForTerm = await recomputeLatestTrendForTerm(db, schoolRef, year, term);
+      latestSnapshotId = latestForTerm.latestSnapshotId || snapshotRef.id || latestSnapshotId;
+      await recomputeAndStoreLeaderboardForTerm(db, SCHOOL_ID, year, term);
+    }
+    if (latestSnapshotId) {
+      await schoolRef.set({ latestSnapshotId }, { merge: true });
+    }
 
     await uploadRef.update({
       status: "processed",
-      snapshotId: snapshotRef.id,
-      rowCount: written,
-      reusedExisting,
-      acceptedRows,
-      ignoredRows,
+      snapshotIds: perWeekResults.map((item) => item.snapshotId),
+      rowCount: totalWritten,
+      acceptedRows: totalAcceptedRows,
+      ignoredRows: totalIgnoredRows,
     });
 
     return res.json({
       uploadId: uploadRef.id,
-      snapshotId: snapshotRef.id,
-      rowCount: written,
-      label,
-      week,
-      reusedExisting,
-      currentWindowDates: windows.current,
-      previousWindowDates: windows.previous,
-      acceptedRows,
-      ignoredRows,
+      snapshotIds: perWeekResults.map((item) => item.snapshotId),
+      weeksProcessed: perWeekResults,
+      rowCount: totalWritten,
+      acceptedRows: totalAcceptedRows,
+      ignoredRows: totalIgnoredRows,
       metric: "Mon-Thu roll-call score",
     });
   } catch (err) {
