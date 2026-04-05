@@ -202,7 +202,15 @@ function renderWeeks(d) {
 
 // ---- Utils ----
 function fmtPct(x) { return (typeof x === "number" && Number.isFinite(x)) ? `${x.toFixed(0)}%` : "—"; }
-function fmtTrend(t) { if (!t) return "—"; if (t==="diamond") return "Improved"; if (t==="gold") return "Maintained"; if (t==="silver") return "Lower"; return t; }
+function fmtTrend(t) {
+  if (!t) return "—";
+  if (t === "goat") return "On time 4/4 days";
+  if (t === "sad1") return "On time 3/4 days";
+  if (t === "sad2") return "On time 2/4 days";
+  if (t === "sad3") return "On time 1/4 days";
+  if (t === "sad4") return "On time 0/4 days";
+  return t;
+}
 function fmtDate(isoOrTS) {
   try {
     const d = typeof isoOrTS === "string" ? new Date(isoOrTS)

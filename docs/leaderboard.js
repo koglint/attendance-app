@@ -68,9 +68,10 @@ function badgeCell(counts) {
 
   const items = [
     ["goat",   "assets/trend/goldenGoat.svg"],
-    ["diamond","assets/trend/diamond.svg"],
-    ["gold",   "assets/trend/gold.svg"],
-    ["silver", "assets/trend/silver.svg"],
+    ["sad1", "assets/trend/sad1.svg"],
+    ["sad2", "assets/trend/sad2.svg"],
+    ["sad3", "assets/trend/sad3.svg"],
+    ["sad4", "assets/trend/sad4.svg"],
   ];
   for (const [k, src] of items) {
     const span = document.createElement("span");
@@ -109,16 +110,19 @@ function renderLeaderboard(weeks, list) {
     const tdGoat = document.createElement("td");
     tdGoat.textContent = row.counts?.goat ?? 0;
 
-    const tdDiamond = document.createElement("td");
-    tdDiamond.textContent = row.counts?.diamond ?? 0;
+    const tdSad1 = document.createElement("td");
+    tdSad1.textContent = row.counts?.sad1 ?? 0;
 
-    const tdGold = document.createElement("td");
-    tdGold.textContent = row.counts?.gold ?? 0;
+    const tdSad2 = document.createElement("td");
+    tdSad2.textContent = row.counts?.sad2 ?? 0;
 
-    const tdSilver = document.createElement("td");
-    tdSilver.textContent = row.counts?.silver ?? 0;
+    const tdSad3 = document.createElement("td");
+    tdSad3.textContent = row.counts?.sad3 ?? 0;
 
-    tr.append(tdRank, tdRoll, tdNorm, tdGoat, tdDiamond, tdGold, tdSilver);
+    const tdSad4 = document.createElement("td");
+    tdSad4.textContent = row.counts?.sad4 ?? 0;
+
+    tr.append(tdRank, tdRoll, tdNorm, tdGoat, tdSad1, tdSad2, tdSad3, tdSad4);
     tbody.appendChild(tr);
   });
 }

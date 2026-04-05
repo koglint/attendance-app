@@ -362,51 +362,35 @@ async function getTopTwoSnapshotRefs(schoolRef, year, term) {
   return { latest, prev };
 }
 
-// === Recomputes trend fields for the latest week vs previous week for a term ===
+// === Recomputes weekly status fields for the latest snapshot for a term ===
 async function recomputeLatestTrendForTerm(db, schoolRef, year, term) {
-  const { latest, prev } = await getTopTwoSnapshotRefs(schoolRef, year, term);
+  const { latest } = await getTopTwoSnapshotRefs(schoolRef, year, term);
   if (!latest) return { latestSnapshotId: null, compared: null };
 
-  // Build prev-week map (externalId -> pct)
-  const prevPctById = new Map();
-  if (prev) {
-    const prevSnap = await prev.ref.collection("rows")
-      .select("externalId", "pctAttendance")
-      .get();
-    prevSnap.forEach(d => {
-      const id = d.get("externalId");
-      const pct = d.get("pctAttendance");
-      if (id && typeof pct === "number") prevPctById.set(String(id), pct);
-    });
-  }
-
-  // Read latest rows, then write trend fields based on prevWeek
   const latestRowsQS = await latest.ref.collection("rows")
-    .select("externalId", "pctAttendance", "rollClass")
+    .select("lateDays", "windowDays")
     .get();
 
   let batch = db.batch();
   let inBatch = 0;
   latestRowsQS.forEach(doc => {
-    const id   = doc.get("externalId");
-    const curr = doc.get("pctAttendance");
-    const prevPct = prevPctById.get(String(id));
-    const status = compareTrend(curr, prevPct);
+    const lateDays = Number(doc.get("lateDays") ?? 0);
+    const windowDays = Number(doc.get("windowDays") ?? 0);
+    const daysOnTime = Math.max(0, windowDays - lateDays);
+    const status = statusFromDaysOnTime(daysOnTime, windowDays);
 
     const ref = doc.ref;
     const data = {
       trend: status ?? null,
-      // if no trend, remove meta; otherwise set it
       ...(status ? {
         trendMeta: {
           year,
           term,
           week: latest.week,
-          prevWeek: prev ? prev.week : null,
-          prev: Number.isFinite(prevPct) ? prevPct : null,
-          curr: Number.isFinite(curr) ? curr : null,
-          epsilon: TREND_EPSILON,
-          version: "v2",
+          daysOnTime,
+          lateDays,
+          windowDays,
+          version: "status-v1",
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }
       } : { trendMeta: admin.firestore.FieldValue.delete?.() || null })
@@ -422,43 +406,35 @@ async function recomputeLatestTrendForTerm(db, schoolRef, year, term) {
   });
   if (inBatch) await batch.commit();
 
-  // Return which weeks were compared and latest snapshot id
   return {
     latestSnapshotId: latest.ref.id,
-    compared: prev ? { fromWeek: prev.week, toWeek: latest.week } : null
+    compared: null
   };
 }
 
-// --- Trend helpers ---
+// --- Weekly status helpers ---
 const TREND = Object.freeze({
-  GOAT: "goat",      // NEW: perfect last week AND this week
-  DIAMOND: "diamond",
-  GOLD: "gold",
-  SILVER: "silver",
+  GOAT: "goat",
+  SAD1: "sad1",
+  SAD2: "sad2",
+  SAD3: "sad3",
+  SAD4: "sad4",
 });
 
-const TREND_EPSILON = 0.1; // existing
-
-// Treat “100%” robustly (in case of 99.999… etc)
-const isHundred = (x, tol = 1e-6) => Number.isFinite(x) && Math.abs(x - 100) <= tol;
-
-
-/** Compare two 0–100 percentages and return a TREND or null if not computable. */
-function compareTrend(curr, prev, eps = TREND_EPSILON) {
-  if (Number.isFinite(curr) && Number.isFinite(prev)) {
-    // NEW: both weeks perfect
-    if (isHundred(curr) && isHundred(prev)) return TREND.GOAT;
-
-    if (curr - prev > eps) return TREND.DIAMOND;
-    if (prev - curr > eps) return TREND.SILVER;
-    return TREND.GOLD;
-  }
+function statusFromDaysOnTime(daysOnTime, windowDays) {
+  if (!Number.isFinite(daysOnTime) || !Number.isFinite(windowDays) || windowDays <= 0) return null;
+  if (daysOnTime >= 4) return TREND.GOAT;
+  if (daysOnTime === windowDays && windowDays < 4) return TREND.GOAT;
+  if (daysOnTime === 3) return TREND.SAD1;
+  if (daysOnTime === 2) return TREND.SAD2;
+  if (daysOnTime === 1) return TREND.SAD3;
+  if (daysOnTime <= 0) return TREND.SAD4;
   return null;
 }
 
 
 // ===== Leaderboard aggregation (term) =====
-const BADGE_POINTS = { silver: 0, gold: 1, diamond: 2, goat: 3 };
+const BADGE_POINTS = { sad4: 0, sad3: 1, sad2: 2, sad1: 3, goat: 4 };
 const TREND_TO_POINTS = BADGE_POINTS;
 const MAX_WEEKS = 12;
 
@@ -497,7 +473,7 @@ async function aggregateTermLeaderboard(db, schoolId, year, term) {
   const byRoll = {};
   function ensureRoll(rc) {
     if (!byRoll[rc]) byRoll[rc] = {
-      counts: { silver:0, gold:0, diamond:0, goat:0 },
+      counts: { goat:0, sad1:0, sad2:0, sad3:0, sad4:0 },
       rawPoints: 0,
       weeks: {}
     };
@@ -512,7 +488,7 @@ async function aggregateTermLeaderboard(db, schoolId, year, term) {
     if (!rc || EXCLUDED_ROLLS.has(String(rc).toLowerCase())) return; // <-- skip these
     const tr = r.get("trend");
     if (!tr || !(tr in TREND_TO_POINTS)) return;
-    wkByRoll[rc] ||= { silver:0, gold:0, diamond:0, goat:0, rawPoints:0 };
+    wkByRoll[rc] ||= { goat:0, sad1:0, sad2:0, sad3:0, sad4:0, rawPoints:0 };
     wkByRoll[rc][tr] += 1;
     wkByRoll[rc].rawPoints += TREND_TO_POINTS[tr];
   });
@@ -520,7 +496,7 @@ async function aggregateTermLeaderboard(db, schoolId, year, term) {
     for (const [rc, wk] of Object.entries(wkByRoll)) {
       const agg = ensureRoll(rc);
       agg.weeks[week] = wk;
-      for (const k of ["silver","gold","diamond","goat"]) agg.counts[k] += wk[k];
+      for (const k of ["goat","sad1","sad2","sad3","sad4"]) agg.counts[k] += wk[k];
       agg.rawPoints += wk.rawPoints;
     }
   }

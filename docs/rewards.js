@@ -18,9 +18,10 @@ let spinning = false;
 
 const tierWeights = {
   goat: 10,
-  diamond: 10,
-  gold: 3,
-  silver: 0.5,
+  sad1: 6,
+  sad2: 3,
+  sad3: 1,
+  sad4: 0.5,
 };
 
 function weightedRandomIndex(weights) {
@@ -112,7 +113,7 @@ async function loadStudents(rollClass) {
   });
 
 
-  tierMap = new Map(rows.map(r => [String(r.externalId), r.trend ?? "silver"]));
+  tierMap = new Map(rows.map(r => [String(r.externalId), r.trend ?? "sad4"]));
   drawWheel(students);
 
 }

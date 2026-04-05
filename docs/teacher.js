@@ -303,15 +303,16 @@ async function loadClassesForSelectedTerm() {
   }
 }
 
-// --- Trend badge (tiny UI helper) ---
+// --- Weekly status badge (tiny UI helper) ---
 function renderTrendBadge(status) {
   if (!status) return " ¯|_(ツ)_/¯";
 
   const map = {
-    diamond: { src: "https://koglint.github.io/attendance-app/assets/trend/diamond.svg", alt: "Diamond (improved)" },
-    gold:    { src: "https://koglint.github.io/attendance-app/assets/trend/gold.svg",    alt: "Gold (maintained)" },
-    silver:  { src: "https://koglint.github.io/attendance-app/assets/trend/silver.svg",  alt: "Silver (lower)" },
-    goat:  { src: "https://koglint.github.io/attendance-app/assets/trend/goldenGoat.svg",  alt: "GOAT (100%)" },
+    goat: { src: "https://koglint.github.io/attendance-app/assets/trend/goldenGoat.svg", alt: "On time all four days" },
+    sad1: { src: "https://koglint.github.io/attendance-app/assets/trend/sad1.svg", alt: "On time 3 of 4 days" },
+    sad2: { src: "https://koglint.github.io/attendance-app/assets/trend/sad2.svg", alt: "On time 2 of 4 days" },
+    sad3: { src: "https://koglint.github.io/attendance-app/assets/trend/sad3.svg", alt: "On time 1 of 4 days" },
+    sad4: { src: "https://koglint.github.io/attendance-app/assets/trend/sad4.svg", alt: "On time 0 of 4 days" },
   };
   const m = map[status];
   if (!m) return "?";
@@ -344,12 +345,11 @@ async function fetchLatestTrends(rollClass) {
   const resp = await authedFetch(`/api/snapshots/latest/classes/${encRC}/rows`);
   const rows = await resp.json();
 
-  // Expect the server endpoint to include trendMeta; if not present we still work.
   const byId = new Map();
   rows.forEach(r => {
     byId.set(String(r.externalId), {
       trend: r.trend ?? null,
-      meta: r.trendMeta ?? null, // { prevWeek, week, ... } if server exposed it
+      meta: r.trendMeta ?? null,
     });
   });
 
@@ -395,7 +395,7 @@ function buildMiniTable(rowsSubset, trendMap) {
 
   const thead = document.createElement("thead");
   const trh = document.createElement("tr");
-  ["ID", "Trend"].forEach(h => {
+  ["ID", "Status"].forEach(h => {
     const th = document.createElement("th");
     th.textContent = h;
     trh.appendChild(th);
@@ -422,9 +422,9 @@ const t = info?.trend ?? (typeof info === "string" ? info : null); // backward c
 const badge = renderTrendBadge(t);
 if (badge instanceof Element) {
   const meta = info?.meta;
-  if (meta && Number.isInteger(meta.prevWeek) && Number.isInteger(meta.week)) {
-    badge.title = `Trend from Week ${meta.prevWeek} to Week ${meta.week}`;
-    badge.setAttribute("data-trend-range", `W${meta.prevWeek}-W${meta.week}`);
+  if (meta && Number.isInteger(meta.daysOnTime) && Number.isInteger(meta.windowDays)) {
+    badge.title = `On time ${meta.daysOnTime} of ${meta.windowDays} days this week`;
+    badge.setAttribute("data-days-on-time", String(meta.daysOnTime));
   }
   tdTr.appendChild(badge);
 } else {
@@ -462,37 +462,14 @@ async function loadRollupForClass() {
 
     const encRC = encodeURIComponent(rollClass);
 
-    // Fetch rollup (weeks + per-student week values) AND latest trends in parallel
+    // Fetch rollup (weeks + per-student week values) AND latest statuses in parallel
     const [rollupResp, trendMap] = await Promise.all([
       authedFetch(`/api/terms/${year}/${term}/classes/${encRC}/rollup`).then(r => r.json()),
-      fetchLatestTrends(rollClass).catch(() => new Map()),  // ← never let it throw
+      fetchLatestTrends(rollClass).catch(() => new Map()),
     ]);
 
     const weeks = Array.isArray(rollupResp.weeks) ? rollupResp.weeks.slice(0, 12) : [];
     const rows  = Array.isArray(rollupResp.rows)  ? rollupResp.rows : [];
-
-    // Determine which weeks are being compared for trend display
-let trendFrom = null, trendTo = null;
-
-// Try to get it from any student's trend meta (preferred, exact)
-for (const r of rows) {
-  const info = trendMap.get(String(r.externalId));
-  const meta = info?.meta;
-  if (meta && Number.isInteger(meta.prevWeek) && Number.isInteger(meta.week)) {
-    trendFrom = meta.prevWeek;
-    trendTo   = meta.week;
-    break;
-  }
-}
-
-// Fallback: if no meta, use the last two term weeks available
-if (trendFrom == null || trendTo == null) {
-  const sortedWeeks = [...weeks].sort((a,b) => a - b);
-  if (sortedWeeks.length >= 2) {
-    trendFrom = sortedWeeks[sortedWeeks.length - 2];
-    trendTo   = sortedWeeks[sortedWeeks.length - 1];
-  }
-}
 
 
 
@@ -507,9 +484,9 @@ if (trendFrom == null || trendTo == null) {
 
     // ===== Build WIDE table (with weeks) =====
     {
-      // Header: ID | Avatar | Trend | W1..WN
+      // Header: ID | Status | W1..WN
       const trh = document.createElement("tr");
-      ["ID", "Trend", ...weeks.map(w => `W${w}`)].forEach((h, idx) => {
+      ["ID", "Status", ...weeks.map(w => `W${w}`)].forEach((h, idx) => {
         const th = document.createElement("th");
         th.textContent = h;
         if (idx >= 2) th.classList.add("weekcol");
@@ -535,11 +512,9 @@ if (trendFrom == null || trendTo == null) {
 
         if (badge instanceof Element) {
           const meta = info?.meta;
-          const fromW = (meta && Number.isInteger(meta.prevWeek)) ? meta.prevWeek : trendFrom;
-          const toW   = (meta && Number.isInteger(meta.week))     ? meta.week     : trendTo;
-          if (fromW != null && toW != null) {
-            badge.title = `Trend from Week ${fromW} to Week ${toW}`;
-            badge.setAttribute("data-trend-range", `W${fromW}-W${toW}`);
+          if (meta && Number.isInteger(meta.daysOnTime) && Number.isInteger(meta.windowDays)) {
+            badge.title = `On time ${meta.daysOnTime} of ${meta.windowDays} days this week`;
+            badge.setAttribute("data-days-on-time", String(meta.daysOnTime));
           }
           tdTr.appendChild(badge);
         } else {
@@ -568,7 +543,7 @@ if (trendFrom == null || trendTo == null) {
       els.tbody.appendChild(frag);
     }
 
-    // ===== Build COMPACT view (ID | Avatar | Trend only) =====
+    // ===== Build COMPACT view (ID | Status only) =====
     {
       // Split rows roughly in half for two columns
       const oneThird = Math.ceil(rows.length / 3 * 1);
@@ -589,13 +564,9 @@ if (trendFrom == null || trendTo == null) {
     // Now toggle which layout is visible
     applyWeekVisibility();
 
-    const trendText = (trendFrom != null && trendTo != null)
-  ? `Trend: Week ${trendFrom} → Week ${trendTo}`
-  : `Trend: (weeks unavailable)`;
-
 setMsg(
   els.tableMsg,
-  `${rows.length} students • Weeks: ${weeks.join(", ") || "—"} • ${trendText}`,
+  `${rows.length} students • Weeks: ${weeks.join(", ") || "—"} • Status based on days on time this week`,
   "ok"
 );
 
