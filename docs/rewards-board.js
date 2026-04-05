@@ -5,7 +5,6 @@ const els = {
   termSelect: document.getElementById("termSelect"),
   weekSelect: document.getElementById("weekSelect"),
   rollClass: document.getElementById("rollClass"),
-  loadButton: document.getElementById("loadButton"),
   spinButton: document.getElementById("spinButton"),
   wheelCanvas: document.getElementById("wheelCanvas"),
   winnerDisplay: document.getElementById("winnerDisplay"),
@@ -14,6 +13,11 @@ const els = {
   weightInfo: document.getElementById("weightInfo"),
   studentCount: document.getElementById("studentCount"),
   studentList: document.getElementById("studentList"),
+  loadingOverlay: document.getElementById("loadingOverlay"),
+  winnerPopup: document.getElementById("winnerPopup"),
+  popupWinnerName: document.getElementById("popupWinnerName"),
+  popupWinnerText: document.getElementById("popupWinnerText"),
+  closePopupBtn: document.getElementById("closePopupBtn"),
 };
 
 const ctx = els.wheelCanvas.getContext("2d");
@@ -32,6 +36,14 @@ const tierLabels = {
   sad2: "2 of 4",
   sad3: "1 of 4",
   sad4: "0 of 4",
+};
+
+const tierIcons = {
+  goat: "./assets/trend/goldenGoat.svg",
+  sad1: "./assets/trend/sad1.svg",
+  sad2: "./assets/trend/sad2.svg",
+  sad3: "./assets/trend/sad3.svg",
+  sad4: "./assets/trend/sad4.svg",
 };
 
 let availableTerms = [];
@@ -65,6 +77,26 @@ function setWinnerResult(text) {
 
 function setSpinEnabled(enabled) {
   els.spinButton.disabled = !enabled;
+}
+
+function setLoading(isLoading) {
+  if (!els.loadingOverlay) return;
+  els.loadingOverlay.classList.toggle("show", isLoading);
+  els.loadingOverlay.setAttribute("aria-hidden", String(!isLoading));
+}
+
+function showWinnerPopup(student) {
+  if (!els.winnerPopup) return;
+  els.popupWinnerName.textContent = student.name;
+  els.popupWinnerText.textContent = `${tierLabels[student.trend] || "Today's"} champion of the wheel.`;
+  els.winnerPopup.classList.add("show");
+  els.winnerPopup.setAttribute("aria-hidden", "false");
+}
+
+function hideWinnerPopup() {
+  if (!els.winnerPopup) return;
+  els.winnerPopup.classList.remove("show");
+  els.winnerPopup.setAttribute("aria-hidden", "true");
 }
 
 function weightedRandomIndex(weights) {
@@ -129,9 +161,11 @@ function renderStudentList(rows) {
     name.className = "student-name";
     name.textContent = student.name;
 
-    const pill = document.createElement("div");
-    pill.className = `status-pill status-${student.trend || "none"}`;
-    pill.textContent = tierLabels[student.trend] || "No status";
+    const pill = document.createElement("img");
+    pill.className = "status-icon";
+    pill.src = tierIcons[student.trend] || "./assets/trend/silver.svg";
+    pill.alt = tierLabels[student.trend] || "No status";
+    pill.title = tierLabels[student.trend] || "No status";
 
     card.appendChild(name);
     card.appendChild(pill);
@@ -185,7 +219,7 @@ function drawWheel(items, rotation = 0) {
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#16324f";
-    ctx.font = `600 ${Math.max(16, Math.min(26, 320 / items.length))}px Segoe UI`;
+    ctx.font = `600 ${Math.max(18, Math.min(30, 360 / items.length))}px Segoe UI`;
     ctx.fillText(items[i].name.slice(0, 20), radius - 34, 0);
     ctx.restore();
   }
@@ -257,28 +291,33 @@ async function loadBoard() {
     return;
   }
 
-  const encRC = encodeURIComponent(rollClass);
-  const rollupResp = await authedFetch(`/api/terms/${year}/${term}/classes/${encRC}/rollup`);
-  const rollup = await rollupResp.json();
-  const weeks = Array.isArray(rollup.weeks) ? rollup.weeks : [];
-  const selectedWeek = Number(els.weekSelect.value) || (weeks[weeks.length - 1] ?? null);
+  setLoading(true);
+  try {
+    const encRC = encodeURIComponent(rollClass);
+    const rollupResp = await authedFetch(`/api/terms/${year}/${term}/classes/${encRC}/rollup`);
+    const rollup = await rollupResp.json();
+    const weeks = Array.isArray(rollup.weeks) ? rollup.weeks : [];
+    const selectedWeek = Number(els.weekSelect.value) || (weeks[weeks.length - 1] ?? null);
 
-  students = (Array.isArray(rollup.rows) ? rollup.rows : []).map((row) => {
-    const info = buildTrendFromWeekArrays(row, weeks, selectedWeek);
-    return {
-      id: String(row.externalId),
-      name: (typeof row.alias === "string" && row.alias.trim()) ? row.alias.trim() : String(row.externalId),
-      trend: info.trend || "sad4",
-      meta: info.meta || null,
-    };
-  }).sort((a, b) => a.name.localeCompare(b.name));
+    students = (Array.isArray(rollup.rows) ? rollup.rows : []).map((row) => {
+      const info = buildTrendFromWeekArrays(row, weeks, selectedWeek);
+      return {
+        id: String(row.externalId),
+        name: (typeof row.alias === "string" && row.alias.trim()) ? row.alias.trim() : String(row.externalId),
+        trend: info.trend || "sad4",
+        meta: info.meta || null,
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
 
-  renderStudentList(students);
-  drawWheel(students);
-  els.boardInfo.textContent = `${year} Term ${term}${selectedWeek ? ` | Week ${selectedWeek}` : ""} | ${rollClass}`;
-  setStatusText("Press Spin Wheel to choose a winner.");
-  setWinnerResult("No winner selected yet.");
-  setSpinEnabled(students.length > 0);
+    renderStudentList(students);
+    drawWheel(students);
+    els.boardInfo.textContent = `${year} Term ${term}${selectedWeek ? ` | Week ${selectedWeek}` : ""} | ${rollClass}`;
+    setStatusText("Press Spin Wheel to choose a winner.");
+    setWinnerResult("No winner selected yet.");
+    setSpinEnabled(students.length > 0);
+  } finally {
+    setLoading(false);
+  }
 }
 
 function spinWheel() {
@@ -307,7 +346,8 @@ function spinWheel() {
     }
 
     setStatusText(`${winner.name} selected`);
-    setWinnerResult(`${winner.name} won with ${tierLabels[winner.trend] || "No status"} weighting.`);
+    setWinnerResult(`${winner.name} won`);
+    showWinnerPopup(winner);
     spinning = false;
     setSpinEnabled(true);
   }
@@ -343,8 +383,11 @@ function spinWheel() {
 
     els.weekSelect.addEventListener("change", loadBoard);
     els.rollClass.addEventListener("change", loadBoard);
-    els.loadButton.addEventListener("click", loadBoard);
     els.spinButton.addEventListener("click", spinWheel);
+    els.closePopupBtn?.addEventListener("click", hideWinnerPopup);
+    els.winnerPopup?.addEventListener("click", (event) => {
+      if (event.target === els.winnerPopup) hideWinnerPopup();
+    });
 
     drawWheel([]);
   } catch (err) {
