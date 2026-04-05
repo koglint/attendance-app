@@ -31,29 +31,15 @@ const els = {
   rosterUploadMsg: document.getElementById("rosterUploadMsg"),
 };
 
-const TERM_CALENDAR = Object.freeze({
-  2026: Object.freeze({
-    1: Object.freeze({ start: "2026-02-02", end: "2026-04-02" }),
-    2: Object.freeze({ start: "2026-04-22", end: "2026-07-03" }),
-    3: Object.freeze({ start: "2026-07-21", end: "2026-09-25" }),
-    4: Object.freeze({ start: "2026-10-13", end: "2026-12-17" }),
-  }),
+const TERM_WEEK_COUNTS = Object.freeze({
+  1: 10,
+  2: 11,
+  3: 10,
+  4: 10,
 });
 
-function parseIsoDateOnly(iso) {
-  const [y, m, d] = String(iso || "").split("-").map(Number);
-  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return null;
-  return new Date(Date.UTC(y, m - 1, d));
-}
-
 function getMaxWeekInTerm(year, term) {
-  const cfg = TERM_CALENDAR[year]?.[term];
-  if (!cfg) return 12;
-  const start = parseIsoDateOnly(cfg.start);
-  const end = parseIsoDateOnly(cfg.end);
-  if (!start || !end) return 12;
-  const diffDays = Math.floor((end.getTime() - start.getTime()) / 86400000);
-  return Math.max(1, Math.min(12, Math.floor(diffDays / 7) + 1));
+  return TERM_WEEK_COUNTS[term] || 10;
 }
 
 function renderWeekOptions() {

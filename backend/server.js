@@ -191,6 +191,13 @@ const TERM_CALENDAR = Object.freeze({
   }),
 });
 
+const TERM_WEEK_COUNTS = Object.freeze({
+  1: 10,
+  2: 11,
+  3: 10,
+  4: 10,
+});
+
 function parseIsoDateOnly(iso) {
   const [y, m, d] = String(iso || "").split("-").map(Number);
   if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return null;
@@ -224,30 +231,44 @@ function getTermBounds(year, term) {
 function getMaxWeekInTerm(year, term) {
   const bounds = getTermBounds(year, term);
   if (!bounds) return null;
-  const diffDays = Math.floor((bounds.end.getTime() - bounds.start.getTime()) / 86400000);
-  return Math.floor(diffDays / 7) + 1;
+  return TERM_WEEK_COUNTS[term] || null;
+}
+
+function isSupportedRollClass(value) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  const normalized = text.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return (
+    /^7[a-z0-9]*/i.test(text) ||
+    /^8[a-z0-9]*/i.test(text) ||
+    normalized.includes("year7") ||
+    normalized.includes("year8") ||
+    normalized.includes("yr7") ||
+    normalized.includes("yr8") ||
+    normalized.includes("y7") ||
+    normalized.includes("y8")
+  );
 }
 
 function getWeekWindowDates(year, term, week) {
   const bounds = getTermBounds(year, term);
   if (!bounds) return null;
-
-  const blockStart = addUtcDays(bounds.start, (week - 1) * 7);
-  if (blockStart.getTime() > bounds.end.getTime()) {
+  const maxWeek = getMaxWeekInTerm(year, term);
+  if (!Number.isInteger(maxWeek) || week < 1 || week > maxWeek) {
     return {
       current: [],
       previous: [],
-      currentBlockStart: toIsoDateOnly(blockStart),
+      currentBlockStart: null,
     };
   }
 
+  const blockStart = addUtcDays(bounds.start, (week - 1) * 7);
+
   function datesForWeek(targetWeek) {
-    if (!Number.isInteger(targetWeek) || targetWeek < 1) return [];
+    if (!Number.isInteger(targetWeek) || targetWeek < 1 || targetWeek > maxWeek) return [];
     const start = addUtcDays(bounds.start, (targetWeek - 1) * 7);
-    if (start.getTime() > bounds.end.getTime()) return [];
-    const end = minDate(addUtcDays(start, 6), bounds.end);
     const dates = [];
-    for (let d = start; d.getTime() <= end.getTime(); d = addUtcDays(d, 1)) {
+    for (let d = start; d.getTime() <= addUtcDays(start, 6).getTime(); d = addUtcDays(d, 1)) {
       const dow = d.getUTCDay();
       if (dow >= 1 && dow <= 4) dates.push(toIsoDateOnly(d));
     }
@@ -740,6 +761,10 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
         ignoredRows++;
         continue;
       }
+      if (!isSupportedRollClass(rollClass)) {
+        ignoredRows++;
+        continue;
+      }
       if (!isUnexplainedLate(row[hShorthand], row[hDescription])) {
         ignoredRows++;
         continue;
@@ -1091,7 +1116,7 @@ app.get("/api/snapshots/latest/classes", requireAuth("teacher"), async (req, res
     const set = new Set();
     snap.forEach(doc => {
       const rc = doc.get("rollClass");
-      if (rc) set.add(rc);
+      if (rc && isSupportedRollClass(rc)) set.add(rc);
     });
     res.json(Array.from(set).sort().map(rollClass => ({ rollClass })));
   } catch (e) {
@@ -1199,13 +1224,22 @@ app.get("/api/terms/:year/:term/classes", requireAuth("teacher"), async (req, re
     // Fast path: use snapshot-level classList if present
     const existing = latestDoc.get("classList");
     if (Array.isArray(existing) && existing.length) {
-      return res.json(existing.slice().sort().map(rollClass => ({ rollClass })));
+      return res.json(
+        existing
+          .filter(isSupportedRollClass)
+          .slice()
+          .sort()
+          .map(rollClass => ({ rollClass }))
+      );
     }
 
     // Slow path (first run / older snapshots): scan rows in THIS ONE snapshot, then seed classList
     const rowsSnap = await latestDoc.ref.collection("rows").select("rollClass").get();
     const set = new Set();
-    rowsSnap.forEach(r => { const rc = r.get("rollClass"); if (rc) set.add(rc); });
+    rowsSnap.forEach(r => {
+      const rc = r.get("rollClass");
+      if (rc && isSupportedRollClass(rc)) set.add(rc);
+    });
     const classes = Array.from(set).sort();
 
     // Seed classList for future fast reads
@@ -1357,7 +1391,7 @@ app.post("/api/roster/upload", requireAuth("admin"), upload.single("file"), asyn
 
     // Detect duplicate/malformed inputs in-memory first
     const seenEmailToId = new Map();
-    const warnings = { duplicateEmails: [], missingId: 0, missingEmail: 0 };
+    const warnings = { duplicateEmails: [], missingId: 0, missingEmail: 0, skippedUnsupportedRollClass: 0 };
 
     // Prepare batched writes
     let batch = db.batch();
@@ -1382,6 +1416,7 @@ app.post("/api/roster/upload", requireAuth("admin"), upload.single("file"), asyn
 
       if (!studentIdRaw) { warnings.missingId++; continue; }
       if (!emailRaw)     { warnings.missingEmail++; continue; }
+      if (!isSupportedRollClass(rollClass)) { warnings.skippedUnsupportedRollClass++; continue; }
 
       // Some rows have multiple emails; split on , ; whitespace
       const emails = emailRaw.split(/[,\s;]+/).map(e => e.toLowerCase()).filter(Boolean);
