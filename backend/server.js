@@ -187,10 +187,10 @@ const clamp01 = n => Math.max(0, Math.min(100, n));
 
 const TERM_CALENDAR = Object.freeze({
   2026: Object.freeze({
-    1: Object.freeze({ start: "2026-02-02", end: "2026-04-02" }),
-    2: Object.freeze({ start: "2026-04-22", end: "2026-07-03" }),
-    3: Object.freeze({ start: "2026-07-21", end: "2026-09-25" }),
-    4: Object.freeze({ start: "2026-10-13", end: "2026-12-17" }),
+    1: Object.freeze({ weekStart: "2026-01-26", studentStart: "2026-02-02", end: "2026-04-02" }),
+    2: Object.freeze({ weekStart: "2026-04-20", studentStart: "2026-04-22", end: "2026-07-03" }),
+    3: Object.freeze({ weekStart: "2026-07-20", studentStart: "2026-07-21", end: "2026-09-25" }),
+    4: Object.freeze({ weekStart: "2026-10-12", studentStart: "2026-10-13", end: "2026-12-17" }),
   }),
 });
 
@@ -226,9 +226,10 @@ function minDate(a, b) {
 function getTermBounds(year, term) {
   const cfg = TERM_CALENDAR[year]?.[term];
   if (!cfg) return null;
-  const start = parseIsoDateOnly(cfg.start);
+  const weekStart = parseIsoDateOnly(cfg.weekStart || cfg.start);
+  const studentStart = parseIsoDateOnly(cfg.studentStart || cfg.start);
   const end = parseIsoDateOnly(cfg.end);
-  return start && end ? { start, end } : null;
+  return weekStart && studentStart && end ? { weekStart, studentStart, end } : null;
 }
 
 function getMaxWeekInTerm(year, term) {
@@ -244,12 +245,13 @@ function inferSchoolWeekFromDate(dateIso) {
     const year = Number(yearText);
     for (const [termText, cfg] of Object.entries(terms || {})) {
       const term = Number(termText);
-      const start = parseIsoDateOnly(cfg.start);
+      const start = parseIsoDateOnly(cfg.weekStart || cfg.start);
       const end = parseIsoDateOnly(cfg.end);
       if (!start || !end) continue;
-      if (target.getTime() < start.getTime() || target.getTime() > end.getTime()) continue;
-      const week = Math.floor((target.getTime() - start.getTime()) / 86400000 / 7) + 1;
       const maxWeek = getMaxWeekInTerm(year, term);
+      const gridEnd = addUtcDays(start, maxWeek * 7 - 1);
+      if (target.getTime() < start.getTime() || target.getTime() > gridEnd.getTime()) continue;
+      const week = Math.floor((target.getTime() - start.getTime()) / 86400000 / 7) + 1;
       if (Number.isInteger(maxWeek) && week >= 1 && week <= maxWeek) {
         return { year, term, week, label: `${year} Term ${term} Week ${week}` };
       }
@@ -290,14 +292,16 @@ function getWeekWindowDates(year, term, week) {
     };
   }
 
-  const blockStart = addUtcDays(bounds.start, (week - 1) * 7);
+  const blockStart = addUtcDays(bounds.weekStart, (week - 1) * 7);
 
   function datesForWeek(targetWeek) {
     if (!Number.isInteger(targetWeek) || targetWeek < 1 || targetWeek > maxWeek) return [];
-    const start = addUtcDays(bounds.start, (targetWeek - 1) * 7);
+    const start = addUtcDays(bounds.weekStart, (targetWeek - 1) * 7);
+    const end = addUtcDays(start, 6);
     const dates = [];
-    for (let d = start; d.getTime() <= addUtcDays(start, 6).getTime(); d = addUtcDays(d, 1)) {
+    for (let d = start; d.getTime() <= end.getTime(); d = addUtcDays(d, 1)) {
       const dow = d.getUTCDay();
+      if (d.getTime() < bounds.studentStart.getTime() || d.getTime() > bounds.end.getTime()) continue;
       if (dow >= 1 && dow <= 4) dates.push(toIsoDateOnly(d));
     }
     return dates;
