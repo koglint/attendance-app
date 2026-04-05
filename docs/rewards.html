@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,7 +10,43 @@
             background: #274472;
             color: white;
             text-align: center;
-            padding: 2rem;
+            padding: 1rem 2rem 2rem;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: .75rem;
+            margin-bottom: 1rem;
+            padding: .55rem .9rem;
+            border: 1px solid #e7f802;
+            border-radius: 14px;
+            text-align: left;
+        }
+
+        .brand {
+            display: flex;
+            gap: .75rem;
+            align-items: baseline;
+            flex-wrap: wrap;
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: 1.2rem;
+        }
+
+        .brand span {
+            opacity: .85;
+            font-size: .85rem;
+        }
+
+        .nav {
+            display: flex;
+            gap: .5rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
         canvas {
@@ -40,39 +75,42 @@
         .tag {
             border: 1px solid #e7f802;
             border-radius: 999px;
-            padding: .2rem .6rem;
+            padding: .3rem .6rem;
             text-decoration: none;
             color: #fff;
+            font-size: .85rem;
         }
     </style>
 
-    <!-- Firebase + Auth -->
     <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore-compat.js"></script>
-    <!-- Backend base URL (same as Teacher page) -->
     <script>
         window.BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com";
     </script>
-
-    <!-- Init: fetches config from backend and initializes Firebase -->
-    <script defer src="./firebase-init.js"></script></head>
-
+    <script defer src="./firebase-init.js"></script>
+</head>
 <body>
-        <header>
-            <h1>🎡 Weekly Reward Spinner 🎉</h1>
-            <nav style="display:flex; gap:.6rem; align-items:center;">
-                <span id="whoami" class="muted"></span>
-                <a class="tag" href="./teacher.html">↩ Back to Teacher</a>
-            </nav>
-        </header>
-    
+    <header class="topbar">
+        <div class="brand">
+            <h1>Attendance App</h1>
+            <span>Spinner</span>
+        </div>
+        <nav class="nav">
+            <a class="tag" href="./rewards-board.html">Board</a>
+            <a class="tag" href="./teacher.html">Teacher</a>
+            <a class="tag" href="./leaderboard.html">Leaderboard</a>
+            <a class="tag" href="./rewards.html">Spinner</a>
+            <a class="tag" href="./admin.html">Admin</a>
+            <a class="tag" href="./student.html">Student</a>
+        </nav>
+    </header>
 
     <label for="rollClass">Choose roll class:</label>
     <select id="rollClass"></select>
 
     <br />
-    <button id="spinButton">Spin the Wheel!</button>
+    <button id="spinButton">Spin the Wheel</button>
 
     <canvas id="wheelCanvas" width="500" height="500"></canvas>
 
@@ -80,5 +118,4 @@
 
     <script type="module" src="./rewards.js"></script>
 </body>
-
 </html>

@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <base href="./" />
-    <title>Leaderboard — Roll-Call Status</title>
+    <title>Leaderboard - Roll-Call Status</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
         body {
@@ -19,6 +19,30 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 1rem;
+        }
+
+        .brand {
+            display: flex;
+            gap: .75rem;
+            align-items: baseline;
+            flex-wrap: wrap;
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: 1.2rem;
+        }
+
+        .brand span {
+            opacity: .85;
+            font-size: .85rem;
+        }
+
+        .nav {
+            display: flex;
+            gap: .5rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
         fieldset {
@@ -88,12 +112,12 @@
         .tag {
             border: 1px solid #e7f802;
             border-radius: 999px;
-            padding: .2rem .6rem;
+            padding: .3rem .6rem;
             text-decoration: none;
             color: #fff;
+            font-size: .85rem;
         }
 
-        /* Pulsating glow for the top row */
         tr.top-glow {
             position: relative;
             z-index: 1;
@@ -112,7 +136,6 @@
             }
         }
 
-        /* Inner glow for the top row cells */
         tr.top-glow td {
             position: relative;
             z-index: 1;
@@ -132,25 +155,26 @@
         }
     </style>
 
-    <!-- Backend base URL -->
     <script>window.BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com";</script>
-
-    <!-- Firebase compat SDKs (match teacher.html) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth-compat.js"></script>
-    <!-- your init (fetches config & initializes) -->
     <script src="./firebase-init.js" defer></script>
-
-    <!-- Page logic -->
     <script type="module" src="./leaderboard.js"></script>
 </head>
 
 <body>
     <header>
-        <h1>Leaderboard</h1>
-        <nav style="display:flex; gap:.6rem; align-items:center;">
-            <span id="whoami" class="muted"></span>
-            <a class="tag" href="./teacher.html">↩ Back to Teacher</a>
+        <div class="brand">
+            <h1>Attendance App</h1>
+            <span>Leaderboard</span>
+        </div>
+        <nav class="nav">
+            <a class="tag" href="./rewards-board.html">Board</a>
+            <a class="tag" href="./teacher.html">Teacher</a>
+            <a class="tag" href="./leaderboard.html">Leaderboard</a>
+            <a class="tag" href="./rewards.html">Spinner</a>
+            <a class="tag" href="./admin.html">Admin</a>
+            <a class="tag" href="./student.html">Student</a>
         </nav>
     </header>
 
@@ -180,7 +204,7 @@
                 <tr>
                     <th>#</th>
                     <th>Roll class</th>
-                    <th class="right" title="(goat=4, sad1=3, sad2=2, sad3=1, sad4=0) ÷ students">Norm points</th>
+                    <th class="right" title="(goat=4, sad1=3, sad2=2, sad3=1, sad4=0) divided by students">Norm points</th>
                     <th title="Goat"><img src="assets/trend/goldenGoat.svg" alt="Goat" style="width:64px;height:64px;vertical-align:middle;"></th>
                     <th title="Sad 1"><img src="assets/trend/sad1.svg" alt="Sad 1" style="width:64px;height:64px;vertical-align:middle;"></th>
                     <th title="Sad 2"><img src="assets/trend/sad2.svg" alt="Sad 2" style="width:64px;height:64px;vertical-align:middle;"></th>

@@ -22,6 +22,53 @@
             padding: 24px 16px;
         }
 
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 10px 14px;
+            border-radius: 16px;
+            background: #121622;
+            border: 1px solid #23293a;
+        }
+
+        .brand {
+            display: flex;
+            gap: 10px;
+            align-items: baseline;
+            flex-wrap: wrap;
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: 1.15rem;
+        }
+
+        .brand span {
+            color: #9fb0c5;
+            font-size: 0.82rem;
+        }
+
+        .nav {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            border-radius: 999px;
+            border: 1px solid #32405c;
+            color: #e9eef7;
+            text-decoration: none;
+            font-size: 0.8rem;
+        }
+
         .card {
             background: #121622;
             border: 1px solid #23293a;
@@ -117,6 +164,21 @@
 
 <body>
     <div class="container">
+        <header class="topbar">
+            <div class="brand">
+                <h1>Attendance App</h1>
+                <span>Student</span>
+            </div>
+            <nav class="nav">
+                <a class="tag" href="./rewards-board.html">Board</a>
+                <a class="tag" href="./teacher.html">Teacher</a>
+                <a class="tag" href="./leaderboard.html">Leaderboard</a>
+                <a class="tag" href="./rewards.html">Spinner</a>
+                <a class="tag" href="./admin.html">Admin</a>
+                <a class="tag" href="./student.html">Student</a>
+            </nav>
+        </header>
+
         <header class="row card" style="align-items:flex-start;">
             <div>
                 <h1 style="margin:0 0 8px;">My Roll-Call Score</h1>

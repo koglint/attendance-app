@@ -8,7 +8,6 @@
         :root {
             --bg: #16324f;
             --panel: #214b72;
-            --panel-2: #1b3e60;
             --accent: #f3c623;
             --line: rgba(255, 255, 255, 0.18);
             --text: #f7fbff;
@@ -35,62 +34,76 @@
         }
 
         body {
-            padding: 12px;
+            padding: 10px;
         }
 
         .app {
-            height: calc(100vh - 24px);
+            height: calc(100vh - 20px);
             display: grid;
             grid-template-rows: auto auto 1fr;
-            gap: 12px;
+            gap: 10px;
         }
 
-        .header,
+        .topbar,
         .controls,
         .panel {
             background: rgba(33, 75, 114, 0.92);
             border: 1px solid var(--line);
-            border-radius: 18px;
+            border-radius: 16px;
             backdrop-filter: blur(8px);
         }
 
-        .header {
+        .topbar {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            padding: 14px 18px;
+            padding: 8px 14px;
         }
 
-        .header h1 {
+        .brand {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .brand h1 {
             margin: 0;
-            font-size: clamp(1.4rem, 2vw, 2.2rem);
+            font-size: clamp(1.05rem, 1.5vw, 1.35rem);
             line-height: 1.1;
         }
 
-        .header p {
-            margin: 4px 0 0;
+        .brand span {
             color: var(--muted);
-            font-size: 0.92rem;
+            font-size: 0.82rem;
+            white-space: nowrap;
+        }
+
+        .nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
         .tag {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
             border: 1px solid var(--line);
             border-radius: 999px;
-            padding: 8px 12px;
+            padding: 6px 10px;
             color: var(--text);
             text-decoration: none;
-            font-size: 0.9rem;
+            font-size: 0.82rem;
         }
 
         .controls {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr)) auto auto;
+            grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
             gap: 10px;
-            padding: 12px;
+            padding: 10px;
             align-items: end;
         }
 
@@ -103,7 +116,7 @@
 
         select, button {
             width: 100%;
-            min-height: 42px;
+            min-height: 40px;
             border-radius: 12px;
             border: 1px solid var(--line);
             padding: 0 12px;
@@ -132,41 +145,52 @@
         .content {
             min-height: 0;
             display: grid;
-            grid-template-columns: minmax(360px, 42%) minmax(0, 1fr);
-            gap: 12px;
+            grid-template-columns: minmax(500px, 48%) minmax(0, 1fr);
+            gap: 10px;
         }
 
         .panel {
             min-height: 0;
-            padding: 14px;
+            padding: 12px;
         }
 
         .wheel-panel {
             display: grid;
-            grid-template-rows: auto 1fr auto;
-            gap: 12px;
-            align-items: center;
+            grid-template-rows: auto auto 1fr auto;
+            gap: 10px;
             justify-items: center;
         }
 
-        .winner {
+        .action-row {
             width: 100%;
-            text-align: center;
-            padding: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 12px;
             border-radius: 14px;
             background: rgba(255, 255, 255, 0.08);
             border: 1px solid var(--line);
         }
 
-        .winner strong {
+        .action-row strong {
             display: block;
-            font-size: clamp(1rem, 1.5vw, 1.35rem);
-            margin-bottom: 4px;
+            font-size: 0.92rem;
         }
 
-        .winner span {
+        .action-row span {
             color: var(--muted);
-            font-size: 0.92rem;
+            font-size: 0.82rem;
+        }
+
+        .winner-result {
+            width: 100%;
+            text-align: center;
+            padding: 8px 10px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.95rem;
         }
 
         .wheel-wrap {
@@ -175,10 +199,12 @@
             display: grid;
             place-items: center;
             min-height: 0;
+            padding: 4px;
         }
 
         canvas {
-            max-width: 100%;
+            width: min(100%, 78vh);
+            height: auto;
             max-height: 100%;
             aspect-ratio: 1 / 1;
             background: #f6f7fb;
@@ -188,11 +214,24 @@
 
         .wheel-note {
             width: 100%;
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
+            display: grid;
+            gap: 8px;
             color: var(--muted);
             font-size: 0.82rem;
+        }
+
+        .weights {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .weight-pill {
+            border-radius: 999px;
+            padding: 5px 9px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: rgba(255, 255, 255, 0.08);
+            white-space: nowrap;
         }
 
         .list-panel {
@@ -295,7 +334,14 @@
 
             .app {
                 height: auto;
-                min-height: calc(100vh - 24px);
+                min-height: calc(100vh - 20px);
+            }
+
+            .topbar,
+            .nav,
+            .action-row {
+                align-items: flex-start;
+                flex-direction: column;
             }
 
             .controls,
@@ -315,12 +361,19 @@
 </head>
 <body>
     <div class="app">
-        <section class="header">
-            <div>
-                <h1>Rewards Board</h1>
-                <p>Spin the weighted wheel and see every student’s current status on the same screen.</p>
+        <section class="topbar">
+            <div class="brand">
+                <h1>Attendance App</h1>
+                <span>Rewards Board</span>
             </div>
-            <a class="tag" href="./teacher.html">Back to Teacher</a>
+            <nav class="nav">
+                <a class="tag" href="./rewards-board.html">Board</a>
+                <a class="tag" href="./teacher.html">Teacher</a>
+                <a class="tag" href="./leaderboard.html">Leaderboard</a>
+                <a class="tag" href="./rewards.html">Spinner</a>
+                <a class="tag" href="./admin.html">Admin</a>
+                <a class="tag" href="./student.html">Student</a>
+            </nav>
         </section>
 
         <section class="controls">
@@ -344,21 +397,23 @@
                 <select id="rollClass"></select>
             </label>
             <button id="loadButton" class="secondary" type="button">Load Board</button>
-            <button id="spinButton" type="button">Spin Wheel</button>
         </section>
 
         <section class="content">
             <section class="panel wheel-panel">
-                <div class="winner" id="winnerDisplay">
-                    <strong>Ready to spin</strong>
-                    <span>Load a class, then spin the wheel.</span>
+                <div class="action-row">
+                    <div>
+                        <strong id="boardInfo">No class loaded yet.</strong>
+                        <span id="winnerDisplay">Load a class to start.</span>
+                    </div>
+                    <button id="spinButton" type="button">Spin Wheel</button>
                 </div>
+                <div class="winner-result" id="winnerResult">No winner selected yet.</div>
                 <div class="wheel-wrap">
-                    <canvas id="wheelCanvas" width="720" height="720"></canvas>
+                    <canvas id="wheelCanvas" width="840" height="840"></canvas>
                 </div>
                 <div class="wheel-note">
-                    <span id="boardInfo">No class loaded yet.</span>
-                    <span id="weightInfo">Weighted by status</span>
+                    <div id="weightInfo" class="weights"></div>
                 </div>
             </section>
 

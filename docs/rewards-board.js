@@ -9,6 +9,7 @@ const els = {
   spinButton: document.getElementById("spinButton"),
   wheelCanvas: document.getElementById("wheelCanvas"),
   winnerDisplay: document.getElementById("winnerDisplay"),
+  winnerResult: document.getElementById("winnerResult"),
   boardInfo: document.getElementById("boardInfo"),
   weightInfo: document.getElementById("weightInfo"),
   studentCount: document.getElementById("studentCount"),
@@ -54,8 +55,16 @@ async function authedFetch(path, init = {}) {
   return resp;
 }
 
-function setWinner(title, subtitle = "") {
-  els.winnerDisplay.innerHTML = `<strong>${title}</strong><span>${subtitle}</span>`;
+function setStatusText(text) {
+  els.winnerDisplay.textContent = text;
+}
+
+function setWinnerResult(text) {
+  els.winnerResult.textContent = text;
+}
+
+function setSpinEnabled(enabled) {
+  els.spinButton.disabled = !enabled;
 }
 
 function weightedRandomIndex(weights) {
@@ -67,6 +76,18 @@ function weightedRandomIndex(weights) {
     if (r < acc) return i;
   }
   return Math.max(0, weights.length - 1);
+}
+
+function renderWeightInfo() {
+  els.weightInfo.replaceChildren();
+  const frag = document.createDocumentFragment();
+  for (const key of ["goat", "sad1", "sad2", "sad3", "sad4"]) {
+    const pill = document.createElement("div");
+    pill.className = "weight-pill";
+    pill.textContent = `${tierLabels[key]} ${tierWeights[key]}x`;
+    frag.appendChild(pill);
+  }
+  els.weightInfo.appendChild(frag);
 }
 
 function renderWeekOptions(preferredWeek = "") {
@@ -129,39 +150,43 @@ function drawWheel(items, rotation = 0) {
   if (!items.length) {
     ctx.fillStyle = "#d8dee9";
     ctx.beginPath();
-    ctx.arc(width / 2, height / 2, radius - 10, 0, Math.PI * 2);
+    ctx.arc(width / 2, height / 2, radius - 12, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = "#173451";
-    ctx.font = "bold 28px Segoe UI";
+    ctx.font = "bold 34px Segoe UI";
     ctx.textAlign = "center";
     ctx.fillText("Load a class", width / 2, height / 2);
     return;
   }
+
+  const angleStep = (Math.PI * 2) / items.length;
+  const baseOffset = -angleStep / 2;
 
   ctx.save();
   ctx.translate(width / 2, height / 2);
   ctx.rotate(rotation);
   ctx.translate(-width / 2, -height / 2);
 
-  const angleStep = (Math.PI * 2) / items.length;
   for (let i = 0; i < items.length; i++) {
-    const start = i * angleStep;
+    const start = baseOffset + (i * angleStep);
     const end = start + angleStep;
+    const mid = start + (angleStep / 2);
 
     ctx.beginPath();
     ctx.moveTo(width / 2, height / 2);
-    ctx.arc(width / 2, height / 2, radius - 10, start, end);
+    ctx.arc(width / 2, height / 2, radius - 12, start, end);
     ctx.closePath();
     ctx.fillStyle = `hsl(${(i * 360) / items.length}, 78%, 66%)`;
     ctx.fill();
 
     ctx.save();
     ctx.translate(width / 2, height / 2);
-    ctx.rotate(start + angleStep / 2);
+    ctx.rotate(mid);
     ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
     ctx.fillStyle = "#16324f";
-    ctx.font = `${Math.max(12, Math.min(18, 240 / items.length))}px Segoe UI`;
-    ctx.fillText(items[i].name.slice(0, 18), radius - 24, 5);
+    ctx.font = `600 ${Math.max(16, Math.min(26, 320 / items.length))}px Segoe UI`;
+    ctx.fillText(items[i].name.slice(0, 20), radius - 34, 0);
     ctx.restore();
   }
 
@@ -169,9 +194,9 @@ function drawWheel(items, rotation = 0) {
 
   ctx.fillStyle = "#d62828";
   ctx.beginPath();
-  ctx.moveTo(width / 2, 14);
-  ctx.lineTo(width / 2 - 18, 50);
-  ctx.lineTo(width / 2 + 18, 50);
+  ctx.moveTo(width / 2, 12);
+  ctx.lineTo(width / 2 - 20, 56);
+  ctx.lineTo(width / 2 + 20, 56);
   ctx.closePath();
   ctx.fill();
 }
@@ -222,7 +247,15 @@ async function loadBoard() {
   const year = Number(els.yearSelect.value);
   const term = Number(els.termSelect.value);
   const rollClass = els.rollClass.value;
-  if (!rollClass) return;
+  if (!rollClass) {
+    students = [];
+    drawWheel([]);
+    renderStudentList([]);
+    setStatusText("Load a class to start.");
+    setWinnerResult("No winner selected yet.");
+    setSpinEnabled(false);
+    return;
+  }
 
   const encRC = encodeURIComponent(rollClass);
   const rollupResp = await authedFetch(`/api/terms/${year}/${term}/classes/${encRC}/rollup`);
@@ -242,13 +275,16 @@ async function loadBoard() {
 
   renderStudentList(students);
   drawWheel(students);
-  els.boardInfo.textContent = `${year} Term ${term}${selectedWeek ? ` • Week ${selectedWeek}` : ""} • ${rollClass}`;
-  setWinner("Ready to spin", "Everyone on the board is visible below.");
+  els.boardInfo.textContent = `${year} Term ${term}${selectedWeek ? ` | Week ${selectedWeek}` : ""} | ${rollClass}`;
+  setStatusText("Press Spin Wheel to choose a winner.");
+  setWinnerResult("No winner selected yet.");
+  setSpinEnabled(students.length > 0);
 }
 
 function spinWheel() {
   if (spinning || !students.length) return;
   spinning = true;
+  setSpinEnabled(false);
 
   const weights = students.map((student) => tierWeights[student.trend] || 1);
   const winnerIndex = weightedRandomIndex(weights);
@@ -270,8 +306,10 @@ function spinWheel() {
       return;
     }
 
-    setWinner(`Winner: ${winner.name}`, `${tierLabels[winner.trend] || "No status"} weighting applied`);
+    setStatusText(`${winner.name} selected`);
+    setWinnerResult(`${winner.name} won with ${tierLabels[winner.trend] || "No status"} weighting.`);
     spinning = false;
+    setSpinEnabled(true);
   }
 
   requestAnimationFrame(animate);
@@ -279,6 +317,8 @@ function spinWheel() {
 
 (async function init() {
   try {
+    renderWeightInfo();
+    setSpinEnabled(false);
     const ready = await (window.firebaseReady || Promise.reject(new Error("firebaseReady missing")));
     const auth = ready.auth || window.firebaseAuth;
 
@@ -309,6 +349,7 @@ function spinWheel() {
     drawWheel([]);
   } catch (err) {
     console.error("Rewards board init error:", err);
-    setWinner("Could not load board", err.message || "Unknown error");
+    setStatusText("Could not load board");
+    setWinnerResult(err.message || "Unknown error");
   }
 })();
