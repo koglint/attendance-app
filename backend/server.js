@@ -311,10 +311,44 @@ function getWeekWindowDates(year, term, week) {
 }
 
 function isRollCallTimeLate(timeRaw) {
-  const text = String(timeRaw || "").trim().toUpperCase();
-  if (!text) return false;
-  const start = text.split("-", 1)[0].replace(/\s+/g, "");
-  return start === "8:00AM" || start === "8:25AM";
+  function toMinuteOfDay(value) {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value.getHours() * 60 + value.getMinutes();
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const parsed = XLSX.SSF.parse_date_code(value);
+      if (parsed && Number.isInteger(parsed.H) && Number.isInteger(parsed.M)) {
+        return parsed.H * 60 + parsed.M;
+      }
+      if (value >= 0 && value < 1) {
+        const totalMinutes = Math.round(value * 24 * 60);
+        return totalMinutes >= 0 && totalMinutes < 24 * 60 ? totalMinutes : null;
+      }
+    }
+
+    const text = String(value || "").trim();
+    if (!text) return null;
+    const firstChunk = text.split(/\s*[-–—]\s*/, 1)[0].trim();
+    const match = firstChunk.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])?$/);
+    if (!match) return null;
+
+    let hour = Number(match[1]);
+    const minute = Number(match[2]);
+    const meridiem = (match[3] || "").toUpperCase();
+    if (!Number.isInteger(hour) || !Number.isInteger(minute) || minute < 0 || minute > 59) return null;
+
+    if (meridiem === "AM") {
+      if (hour === 12) hour = 0;
+    } else if (meridiem === "PM") {
+      if (hour !== 12) hour += 12;
+    }
+
+    if (hour < 0 || hour > 23) return null;
+    return hour * 60 + minute;
+  }
+
+  const minuteOfDay = toMinuteOfDay(timeRaw);
+  return minuteOfDay === 8 * 60 || minuteOfDay === (8 * 60 + 25);
 }
 
 function isRollCallMiss(shorthandRaw, descriptionRaw, timeRaw) {
@@ -773,21 +807,42 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
       const reportRollClassById = new Map();
       let acceptedRows = 0;
       let ignoredRows = 0;
+      const diagnostics = {
+        missingCoreFields: 0,
+        unsupportedRollClass: 0,
+        codeMismatch: 0,
+        timeMismatch: 0,
+        outsideWindows: 0,
+      };
 
       for (const row of records) {
         const externalId = String(row[hExternal] ?? "").trim().replace(/\//g, "_");
         const rollClass = String(row[hClass] ?? "").trim();
         const date = normalizeReportDate(row[hDate]);
+        const codeMatches =
+          (String(row[hShorthand] ?? "").trim().toUpperCase() === "U" &&
+            String(row[hDescription] ?? "").trim().toLowerCase() === "unjustified") ||
+          (String(row[hShorthand] ?? "").trim().toUpperCase() === "?" &&
+            String(row[hDescription] ?? "").trim().toLowerCase() === "absent");
+        const timeMatches = isRollCallTimeLate(row[hTime]);
 
         if (!externalId || !rollClass || !date) {
+          diagnostics.missingCoreFields++;
           ignoredRows++;
           continue;
         }
         if (!isSupportedRollClass(rollClass)) {
+          diagnostics.unsupportedRollClass++;
           ignoredRows++;
           continue;
         }
-        if (!isRollCallMiss(row[hShorthand], row[hDescription], row[hTime])) {
+        if (!codeMatches) {
+          diagnostics.codeMismatch++;
+          ignoredRows++;
+          continue;
+        }
+        if (!timeMatches) {
+          diagnostics.timeMismatch++;
           ignoredRows++;
           continue;
         }
@@ -808,6 +863,7 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
           continue;
         }
 
+        diagnostics.outsideWindows++;
         ignoredRows++;
       }
 
@@ -924,6 +980,7 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
         rowCount: written,
         acceptedRows,
         ignoredRows,
+        diagnostics,
       });
       totalWritten += written;
       totalAcceptedRows += acceptedRows;
