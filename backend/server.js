@@ -355,15 +355,35 @@ function isRollCallTimeLate(timeRaw) {
   return minuteOfDay === 8 * 60 || minuteOfDay === (8 * 60 + 25);
 }
 
+function normalizeTimeRangeText(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[–—]/g, "-")
+    .replace(/\s+/g, "");
+}
+
+function isAllDayAbsenceTime(value) {
+  const normalized = normalizeTimeRangeText(value);
+  return (
+    normalized === "8:00AM-2:45PM" ||
+    normalized === "8:25AM-2:45PM"
+  );
+}
+
 function isRollCallMiss(shorthandRaw, descriptionRaw, timeRaw) {
   const shorthand = String(shorthandRaw || "").trim().toUpperCase();
   const description = String(descriptionRaw || "").trim().toLowerCase();
+  const hasUnexplainedCode =
+    (shorthand === "U" && description === "unjustified") ||
+    (shorthand === "?" && description === "absent");
   return (
+    hasUnexplainedCode &&
     (
-      (shorthand === "U" && description === "unjustified") ||
-      (shorthand === "?" && description === "absent")
-    ) &&
-    isRollCallTimeLate(timeRaw)
+      String(timeRaw || "").trim() === "" ||
+      isRollCallTimeLate(timeRaw) ||
+      isAllDayAbsenceTime(timeRaw)
+    )
   );
 }
 
@@ -828,7 +848,11 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
             String(row[hDescription] ?? "").trim().toLowerCase() === "unjustified") ||
           (String(row[hShorthand] ?? "").trim().toUpperCase() === "?" &&
             String(row[hDescription] ?? "").trim().toLowerCase() === "absent");
-        const timeMatches = isRollCallTimeLate(row[hTime]);
+        const rawTime = row[hTime];
+        const timeMatches =
+          String(rawTime || "").trim() === "" ||
+          isRollCallTimeLate(rawTime) ||
+          isAllDayAbsenceTime(rawTime);
 
         if (!externalId || !rollClass || !date) {
           diagnostics.missingCoreFields++;
