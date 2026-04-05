@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rewards Board</title>
+    <style>
+        :root {
+            --bg: #16324f;
+            --panel: #214b72;
+            --panel-2: #1b3e60;
+            --accent: #f3c623;
+            --line: rgba(255, 255, 255, 0.18);
+            --text: #f7fbff;
+            --muted: rgba(247, 251, 255, 0.78);
+            --goat: #f5cf5c;
+            --sad1: #c2e46d;
+            --sad2: #ffca6c;
+            --sad3: #ff9966;
+            --sad4: #ef6f6c;
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: "Segoe UI", system-ui, sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(243, 198, 35, 0.18), transparent 28%),
+                linear-gradient(135deg, #13304a 0%, var(--bg) 40%, #10253b 100%);
+            color: var(--text);
+        }
+
+        body {
+            padding: 12px;
+        }
+
+        .app {
+            height: calc(100vh - 24px);
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            gap: 12px;
+        }
+
+        .header,
+        .controls,
+        .panel {
+            background: rgba(33, 75, 114, 0.92);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            backdrop-filter: blur(8px);
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 14px 18px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: clamp(1.4rem, 2vw, 2.2rem);
+            line-height: 1.1;
+        }
+
+        .header p {
+            margin: 4px 0 0;
+            color: var(--muted);
+            font-size: 0.92rem;
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            padding: 8px 12px;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr)) auto auto;
+            gap: 10px;
+            padding: 12px;
+            align-items: end;
+        }
+
+        label {
+            display: grid;
+            gap: 6px;
+            font-size: 0.82rem;
+            color: var(--muted);
+        }
+
+        select, button {
+            width: 100%;
+            min-height: 42px;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            padding: 0 12px;
+            font: inherit;
+        }
+
+        select {
+            background: rgba(255, 255, 255, 0.96);
+            color: #173451;
+        }
+
+        button {
+            cursor: pointer;
+            background: var(--accent);
+            color: #18232f;
+            font-weight: 700;
+            border: none;
+        }
+
+        button.secondary {
+            background: rgba(255, 255, 255, 0.14);
+            color: var(--text);
+            border: 1px solid var(--line);
+        }
+
+        .content {
+            min-height: 0;
+            display: grid;
+            grid-template-columns: minmax(360px, 42%) minmax(0, 1fr);
+            gap: 12px;
+        }
+
+        .panel {
+            min-height: 0;
+            padding: 14px;
+        }
+
+        .wheel-panel {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            gap: 12px;
+            align-items: center;
+            justify-items: center;
+        }
+
+        .winner {
+            width: 100%;
+            text-align: center;
+            padding: 12px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--line);
+        }
+
+        .winner strong {
+            display: block;
+            font-size: clamp(1rem, 1.5vw, 1.35rem);
+            margin-bottom: 4px;
+        }
+
+        .winner span {
+            color: var(--muted);
+            font-size: 0.92rem;
+        }
+
+        .wheel-wrap {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            place-items: center;
+            min-height: 0;
+        }
+
+        canvas {
+            max-width: 100%;
+            max-height: 100%;
+            aspect-ratio: 1 / 1;
+            background: #f6f7fb;
+            border-radius: 50%;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
+        }
+
+        .wheel-note {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            color: var(--muted);
+            font-size: 0.82rem;
+        }
+
+        .list-panel {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            gap: 10px;
+        }
+
+        .list-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .list-header h2 {
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .count {
+            color: var(--muted);
+            font-size: 0.84rem;
+        }
+
+        .student-grid {
+            min-height: 0;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px 10px;
+            align-content: start;
+        }
+
+        .student-card {
+            min-width: 0;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .student-name {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 0.9rem;
+        }
+
+        .status-pill {
+            min-width: 72px;
+            text-align: center;
+            border-radius: 999px;
+            padding: 5px 8px;
+            font-size: 0.76rem;
+            font-weight: 700;
+            color: #12263d;
+        }
+
+        .status-goat { background: var(--goat); }
+        .status-sad1 { background: var(--sad1); }
+        .status-sad2 { background: var(--sad2); }
+        .status-sad3 { background: var(--sad3); }
+        .status-sad4 { background: var(--sad4); color: #fff; }
+        .status-none { background: rgba(255, 255, 255, 0.2); color: var(--text); }
+
+        .empty {
+            display: grid;
+            place-items: center;
+            min-height: 0;
+            color: var(--muted);
+            text-align: center;
+            padding: 20px;
+            border: 1px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 14px;
+        }
+
+        @media (max-width: 1100px) {
+            .controls {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .content {
+                grid-template-columns: 1fr;
+            }
+
+            .student-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 720px) {
+            html, body {
+                overflow: auto;
+            }
+
+            .app {
+                height: auto;
+                min-height: calc(100vh - 24px);
+            }
+
+            .controls,
+            .student-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore-compat.js"></script>
+    <script>
+        window.BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com";
+    </script>
+    <script defer src="./firebase-init.js"></script>
+</head>
+<body>
+    <div class="app">
+        <section class="header">
+            <div>
+                <h1>Rewards Board</h1>
+                <p>Spin the weighted wheel and see every student’s current status on the same screen.</p>
+            </div>
+            <a class="tag" href="./teacher.html">Back to Teacher</a>
+        </section>
+
+        <section class="controls">
+            <label>Year
+                <select id="yearSelect"></select>
+            </label>
+            <label>Term
+                <select id="termSelect">
+                    <option value="1">Term 1</option>
+                    <option value="2">Term 2</option>
+                    <option value="3">Term 3</option>
+                    <option value="4">Term 4</option>
+                </select>
+            </label>
+            <label>Week
+                <select id="weekSelect">
+                    <option value="">Latest available</option>
+                </select>
+            </label>
+            <label>Roll Class
+                <select id="rollClass"></select>
+            </label>
+            <button id="loadButton" class="secondary" type="button">Load Board</button>
+            <button id="spinButton" type="button">Spin Wheel</button>
+        </section>
+
+        <section class="content">
+            <section class="panel wheel-panel">
+                <div class="winner" id="winnerDisplay">
+                    <strong>Ready to spin</strong>
+                    <span>Load a class, then spin the wheel.</span>
+                </div>
+                <div class="wheel-wrap">
+                    <canvas id="wheelCanvas" width="720" height="720"></canvas>
+                </div>
+                <div class="wheel-note">
+                    <span id="boardInfo">No class loaded yet.</span>
+                    <span id="weightInfo">Weighted by status</span>
+                </div>
+            </section>
+
+            <section class="panel list-panel">
+                <div class="list-header">
+                    <h2>Students and Status</h2>
+                    <div class="count" id="studentCount">0 students</div>
+                </div>
+                <div id="studentList" class="student-grid"></div>
+            </section>
+        </section>
+    </div>
+
+    <script type="module" src="./rewards-board.js"></script>
+</body>
+</html>
