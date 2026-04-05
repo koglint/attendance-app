@@ -88,7 +88,7 @@ function setLoading(isLoading) {
 function showWinnerPopup(student) {
   if (!els.winnerPopup) return;
   els.popupWinnerName.textContent = student.name;
-  els.popupWinnerText.textContent = `${tierLabels[student.trend] || "Today's"} champion of the wheel.`;
+  els.popupWinnerText.textContent = "What a moment.";
   els.winnerPopup.classList.add("show");
   els.winnerPopup.setAttribute("aria-hidden", "false");
 }

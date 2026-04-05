@@ -4,7 +4,7 @@
 
 // ==== CONFIG ====
 const BACKEND_BASE_URL = "https://attendance-app-lfwc.onrender.com";
-let showWeeks = false;
+let showWeeks = true;
 
 // ====== UI refs ======
 const els = {
@@ -32,7 +32,6 @@ const els = {
   thead: document.querySelector("#dataTable thead"),
   tbody: document.querySelector("#dataTable tbody"),
 
-  toggleWeeks: document.getElementById("toggleWeeks"),
   compactGrid: document.getElementById("compactGrid"),
 };
 
@@ -91,8 +90,7 @@ function showSignedOutUI() {
   els.thead.replaceChildren();
   els.tbody.replaceChildren();
 
-  if (els.toggleWeeks) els.toggleWeeks.checked = false;
-    showWeeks = false;
+  showWeeks = true;
 
 }
 
@@ -176,13 +174,6 @@ if (els.signInBtn) {
     els.weekSelect?.addEventListener("change", () => {
       if (els.classSelect?.value) loadRollupForClass();
     });
-    if (els.toggleWeeks) {
-      els.toggleWeeks.addEventListener("change", () => {
-        showWeeks = !!els.toggleWeeks.checked;
-        applyWeekVisibility();
-      });
-    }
-
     setSignInEnabled(true);
     setMsg(els.authMsg, "");
 
@@ -659,7 +650,6 @@ function applyWeekVisibility() {
     els.compactGrid.style.display = "grid";
   }
 
-  if (els.toggleWeeks) els.toggleWeeks.checked = showWeeks;
 }
 
 

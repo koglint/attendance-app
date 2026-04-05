@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <base href="./" />
-    <title>Teacher — Roll-Call Summary</title>
+    <title>Attendance Data — Roll-Call Summary</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
         body {
@@ -339,15 +339,13 @@
     <header>
         <div class="brand">
             <h1>Attendance App</h1>
-            <span>Teacher</span>
+            <span>Attendance Data</span>
         </div>
         <div class="nav">
             <a class="tag" href="./rewards-board.html">Board</a>
-            <a class="tag" href="./teacher.html">Teacher</a>
+            <a class="tag" href="./teacher.html">Attendance Data</a>
             <a class="tag" href="./leaderboard.html">Leaderboard</a>
-            <a class="tag" href="./rewards.html">Spinner</a>
             <a class="tag" href="./admin.html">Admin</a>
-            <a class="tag" href="./student.html">Student</a>
             <span id="whoami" class="muted"></span>
             <button id="signOutBtn" style="display:none;">Sign out</button>
         </div>
@@ -387,9 +385,6 @@
         <button type="button" onclick="window.location.href='leaderboard.html'">
             View Leaderboard
         </button>
-        <button type="button" onclick="window.location.href = 'rewards.html'">
-            View Rewards
-        </button>
         <button type="button" onclick="window.location.href = 'rewards-board.html'">
             Rewards Board
         </button>
@@ -428,11 +423,6 @@
 
         <button type="button" id="loadTermBtn">Load term</button>
         <button type="button" id="refreshBtn" title="Reload list">↻</button>
-        <label style="margin-left: 1rem;">
-            <input type="checkbox" id="toggleWeeks" />
-            Show weekly roll-call scores
-        </label>
-
     </div>
 
     <div id="snapshotInfo" class="muted" style="margin-top:.5rem;">Pick a year & term, then Load.</div>
