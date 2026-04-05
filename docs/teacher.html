@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <base href="./" />
-    <title>Teacher — Attendance summary</title>
+    <title>Teacher — Roll-Call Summary</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
         body {
@@ -378,7 +378,7 @@
         <button type="button" id="refreshBtn" title="Reload list">↻</button>
         <label style="margin-left: 1rem;">
             <input type="checkbox" id="toggleWeeks" />
-            Show weekly percentages
+            Show weekly roll-call scores
         </label>
 
     </div>
@@ -392,23 +392,23 @@
         <li class="legend-item">
             <img src="https://koglint.github.io/attendance-app/assets/trend/goldenGoat.svg" alt="" width="16" height="16"
                 decoding="async">
-            <span> Fortnightly <br /> Attendance 100%</span>
+            <span> On time at roll call <br /> both weeks</span>
         </li>
         <li class="legend-item">
             <img src="https://koglint.github.io/attendance-app/assets/trend/diamond.svg" alt="" width="16" height="16"
                 decoding="async">
-            <span> Attendance <br/> Up</span>
+            <span> Roll-call score <br/> Up</span>
         </li>
         
         <li class="legend-item">
             <img src="https://koglint.github.io/attendance-app/assets/trend/gold.svg" alt="" width="16" height="16"
                 decoding="async">
-            <span> Attendance <br/> Same</span>
+            <span> Roll-call score <br/> Same</span>
         </li>
         <li class="legend-item">
             <img src="https://koglint.github.io/attendance-app/assets/trend/silver.svg" alt="" width="16" height="16"
                 decoding="async">
-            <span> Attendance <br/> Down</span>
+            <span> Roll-call score <br/> Down</span>
         </li>
 
 
@@ -417,7 +417,7 @@
 
 
 <fieldset>
-    <legend>Attendance</legend>
+    <legend>Roll-call score</legend>
     <div id="tableMsg" class="muted">Choose a class to view.</div>
 
     <!-- Wide table (used when weeks are shown) -->

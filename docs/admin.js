@@ -241,7 +241,7 @@ Auth.onChange(async (user) => {
     }
   });
 
-  // ====== CSV Upload handling ======
+  // ====== Absence report upload handling ======
   els.uploadBtn?.addEventListener("click", async () => {
     if (!IS_ADMIN) { setMsg(els.uploadMsg, "Admin access required.", "error"); return; }
 
@@ -249,7 +249,7 @@ Auth.onChange(async (user) => {
     if (!user) return setMsg(els.uploadMsg, "Please sign in first", "error");
 
     const file = els.csvFile?.files?.[0];
-    if (!file) return setMsg(els.uploadMsg, "Choose a CSV file", "error");
+    if (!file) return setMsg(els.uploadMsg, "Choose an absence report file", "error");
 
     setMsg(els.uploadMsg, "Uploading...");
     if (els.uploadResult) els.uploadResult.textContent = "";
@@ -276,12 +276,12 @@ Auth.onChange(async (user) => {
 
       // Confirmation popup
       const proceed = window.confirm(
-        `Are you sure you want to upload this CSV?\n\n` +
+        `Are you sure you want to upload this absence report?\n\n` +
         `• File: ${file.name}\n` +
         `• Year: ${year}\n` +
         `• Term: ${term}\n` +
         `• Week: ${week}\n\n` +
-        `This will create a new snapshot and may overwrite existing data for these labels.`
+        `This will rebuild the selected week's Mon-Thu roll-call score and may overwrite existing data for these labels.`
       );
       if (!proceed) {
         setMsg(els.uploadMsg, "Upload cancelled.");

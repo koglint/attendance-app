@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <base href="./" />
-    <title>Admin — Upload Attendance CSV</title>
+    <title>Admin — Upload Roll-Call Report</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
         body {
@@ -109,11 +109,11 @@
             <!-- Visible to any signed-in user; the server still enforces role -->
             <section id="onlyAuthed">
                 <fieldset>
-                    <legend>Upload weekly CSV</legend>
+                    <legend>Upload weekly absence report</legend>
             
             
             
-                    <!-- inside <fieldset> for Upload weekly CSV, before the file input -->
+                    <!-- inside <fieldset> for the weekly report upload, before the file input -->
                     <div style="display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap">
                         <label>Year<br />
                             <select id="yearSelect"></select>
@@ -148,9 +148,8 @@
                     </div>
             
             
-                    <p class="muted">Expected columns (case/spacing tolerant): <code class="mono">External id</code>, <code
-                            class="mono">Rollclass name</code>, <code class="mono">Percentage present</code>.</p>
-                    <input id="csvFile" type="file" accept=".csv,text/csv" />
+                    <p class="muted">Upload the Sentral <code class="mono">absence_list</code> report. The backend only counts Mon-Thu rows where <code class="mono">Shorthand</code> is <code class="mono">U</code> and <code class="mono">Description</code> is <code class="mono">Unjustified</code>, or <code class="mono">Shorthand</code> is <code class="mono">?</code> and <code class="mono">Description</code> is <code class="mono">Absent</code>. Extra dates in the file are ignored.</p>
+                    <input id="csvFile" type="file" accept=".xls,.xlsx,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" />
                     <button id="uploadBtn">Upload</button>
                     <div id="uploadMsg" class="muted"></div>
                     <pre id="uploadResult" class="mono"></pre>

@@ -2,6 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const { parse } = require("csv-parse/sync");
 const crypto = require("crypto");
+const XLSX = require("xlsx");
 
 
 const PORT = process.env.PORT || 3000;
@@ -150,18 +151,23 @@ const upload = multer({
 });
 
 // Header mapping helpers (tolerate case/spacing variants)
-const REQUIRED_HEADERS = {
-  externalId: [
-    "External id","ExternalId","Student ID","StudentId",
-    "External_id","ExternalID","ID","SentralId","Sentral ID"
+const ABSENCE_REPORT_HEADERS = {
+  studentId: [
+    "Student ID","StudentId","External id","ExternalId",
+    "External_id","ExternalID","ID","Sentral ID","SentralId"
   ],
   rollClass: [
-    "Rollclass name","Rollclass","Roll class name","Roll class",
-    "Class","Homegroup","RollGroup","Roll group","Roll Class"
+    "Roll Class","Rollclass name","Rollclass","Roll class name","Roll class",
+    "Class","Homegroup","RollGroup","Roll group"
   ],
-  pctAttendance: [
-    "Percentage Attendance", "Percentage attendance", "percentage attendance", "Percentage present","Percentage Present","Present %","% Present",
-    "Attendance %","Attendance percent","Percent present"
+  date: [
+    "Date","Attendance Date","Absence Date"
+  ],
+  shorthand: [
+    "Shorthand","Code","Attendance Code"
+  ],
+  description: [
+    "Description","Attendance Description","Status"
   ]
 };
 const normalize = h => String(h || "").toLowerCase().replace(/[^a-z0-9]/g,"");
@@ -175,6 +181,144 @@ function findHeader(headers, candidates) {
   return null;
 }
 const clamp01 = n => Math.max(0, Math.min(100, n));
+
+const TERM_CALENDAR = Object.freeze({
+  2026: Object.freeze({
+    1: Object.freeze({ start: "2026-02-02", end: "2026-04-02" }),
+    2: Object.freeze({ start: "2026-04-22", end: "2026-07-03" }),
+    3: Object.freeze({ start: "2026-07-21", end: "2026-09-25" }),
+    4: Object.freeze({ start: "2026-10-13", end: "2026-12-17" }),
+  }),
+});
+
+function parseIsoDateOnly(iso) {
+  const [y, m, d] = String(iso || "").split("-").map(Number);
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return null;
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+function toIsoDateOnly(value) {
+  const dt = value instanceof Date ? value : new Date(value);
+  if (!(dt instanceof Date) || Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString().slice(0, 10);
+}
+
+function addUtcDays(date, days) {
+  const next = new Date(date.getTime());
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function minDate(a, b) {
+  return a.getTime() <= b.getTime() ? a : b;
+}
+
+function getTermBounds(year, term) {
+  const cfg = TERM_CALENDAR[year]?.[term];
+  if (!cfg) return null;
+  const start = parseIsoDateOnly(cfg.start);
+  const end = parseIsoDateOnly(cfg.end);
+  return start && end ? { start, end } : null;
+}
+
+function getWeekWindowDates(year, term, week) {
+  const bounds = getTermBounds(year, term);
+  if (!bounds) return null;
+
+  const blockStart = addUtcDays(bounds.start, (week - 1) * 7);
+  if (blockStart.getTime() > bounds.end.getTime()) {
+    return {
+      current: [],
+      previous: [],
+      currentBlockStart: toIsoDateOnly(blockStart),
+    };
+  }
+
+  function datesForWeek(targetWeek) {
+    if (!Number.isInteger(targetWeek) || targetWeek < 1) return [];
+    const start = addUtcDays(bounds.start, (targetWeek - 1) * 7);
+    if (start.getTime() > bounds.end.getTime()) return [];
+    const end = minDate(addUtcDays(start, 6), bounds.end);
+    const dates = [];
+    for (let d = start; d.getTime() <= end.getTime(); d = addUtcDays(d, 1)) {
+      const dow = d.getUTCDay();
+      if (dow >= 1 && dow <= 4) dates.push(toIsoDateOnly(d));
+    }
+    return dates;
+  }
+
+  return {
+    current: datesForWeek(week),
+    previous: datesForWeek(week - 1),
+    currentBlockStart: toIsoDateOnly(blockStart),
+  };
+}
+
+function isUnexplainedLate(shorthandRaw, descriptionRaw) {
+  const shorthand = String(shorthandRaw || "").trim().toUpperCase();
+  const description = String(descriptionRaw || "").trim().toLowerCase();
+  return (
+    (shorthand === "U" && description === "unjustified") ||
+    (shorthand === "?" && description === "absent")
+  );
+}
+
+function normalizeReportDate(value) {
+  if (value instanceof Date) return toIsoDateOnly(value);
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const parts = XLSX.SSF.parse_date_code(value);
+    if (!parts) return null;
+    return toIsoDateOnly(new Date(Date.UTC(parts.y, parts.m - 1, parts.d)));
+  }
+
+  const text = String(value || "").trim();
+  if (!text) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+
+  const dt = new Date(text);
+  return Number.isNaN(dt.getTime()) ? null : toIsoDateOnly(dt);
+}
+
+function parseTabularUpload(buffer, filename = "") {
+  const lower = String(filename || "").toLowerCase();
+  if (lower.endsWith(".csv")) {
+    const text = buffer.toString("utf8");
+    return {
+      rows: parse(text, { columns: true, skip_empty_lines: true, bom: true }),
+      sourceType: "csv",
+      sheetName: null,
+    };
+  }
+
+  const workbook = XLSX.read(buffer, {
+    type: "buffer",
+    cellDates: true,
+    dense: false,
+  });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) return { rows: [], sourceType: "spreadsheet", sheetName: null };
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+    defval: "",
+    raw: true,
+  });
+  return { rows, sourceType: "spreadsheet", sheetName };
+}
+
+async function fetchRosterStudentMap(schoolRef) {
+  const snap = await schoolRef.collection("roster").get();
+  const map = new Map();
+  snap.forEach((doc) => {
+    const data = doc.data() || {};
+    const externalId = String(data.externalId || doc.id).replace(/\//g, "_");
+    map.set(externalId, {
+      externalId,
+      rollClass: data.rollClass || null,
+      firstName: data.givenNames || null,
+      surname: data.surname || null,
+    });
+  });
+  return map;
+}
 
 // --- Join roster aliases for a list of externalIds (doc id = externalId with / replaced) ---
 async function fetchAliasMapForIds(ids) {
@@ -437,7 +581,7 @@ async function findPreviousSnapshotRef(db, schoolRef, year, term, week) {
 }
 
 
-// Admin upload: accepts CSV and writes a new snapshot
+// Admin upload: accepts Sentral absence list reports and writes a new snapshot
 app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req, res) => {
   try {
     if (!admin || !db) return res.status(503).json({ error: "auth not initialised on server" });
@@ -457,6 +601,13 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
       return res.status(400).json({ error: "invalid week (1–12)" });
     }
     const label = `${year} Term ${term} Week ${week}`;
+    const windows = getWeekWindowDates(year, term, week);
+    if (!windows) {
+      return res.status(400).json({ error: `no term calendar configured for ${year} term ${term}` });
+    }
+    if (!windows.current.length) {
+      return res.status(400).json({ error: "selected week is outside the configured term bounds" });
+    }
 
     // Checksums (info/diagnostics)
     const contentChecksum = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
@@ -471,20 +622,22 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
     const uploadsColl = schoolRef.collection("uploads");
     const snapsColl = schoolRef.collection("snapshots");
 
-    // Parse CSV
-    const text = req.file.buffer.toString("utf8");
-    const records = parse(text, { columns: true, skip_empty_lines: true, bom: true });
-    if (!records.length) return res.status(400).json({ error: "empty CSV" });
+    // Parse report rows from CSV/XLS/XLSX
+    const parsedUpload = parseTabularUpload(req.file.buffer, req.file.originalname || "");
+    const records = parsedUpload.rows;
+    if (!records.length) return res.status(400).json({ error: "empty report" });
 
     // Header detection
     const headers = Object.keys(records[0]);
-    const hExternal = findHeader(headers, REQUIRED_HEADERS.externalId);
-    const hClass = findHeader(headers, REQUIRED_HEADERS.rollClass);
-    const hPct = findHeader(headers, REQUIRED_HEADERS.pctAttendance);
-    if (!hExternal || !hClass || !hPct) {
+    const hExternal = findHeader(headers, ABSENCE_REPORT_HEADERS.studentId);
+    const hClass = findHeader(headers, ABSENCE_REPORT_HEADERS.rollClass);
+    const hDate = findHeader(headers, ABSENCE_REPORT_HEADERS.date);
+    const hShorthand = findHeader(headers, ABSENCE_REPORT_HEADERS.shorthand);
+    const hDescription = findHeader(headers, ABSENCE_REPORT_HEADERS.description);
+    if (!hExternal || !hClass || !hDate || !hShorthand || !hDescription) {
       return res.status(400).json({
         error: "missing required columns",
-        required: ["External id", "Rollclass name", "Percentage Attendance"],
+        required: ["Student ID", "Roll Class", "Date", "Shorthand", "Description"],
         found: headers
       });
     }
@@ -492,7 +645,7 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
     // Create upload record (status: processing)
     const uploadRef = uploadsColl.doc();
     await uploadRef.set({
-      filename: req.file.originalname || "upload.csv",
+      filename: req.file.originalname || "absence-report",
       contentChecksum,
       compoundChecksum,
       uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -502,7 +655,12 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
       year,
       term,
       week,
-      label
+      label,
+      sourceType: parsedUpload.sourceType,
+      sourceSheet: parsedUpload.sheetName,
+      metric: "mon-thu-roll-call",
+      currentWindowDates: windows.current,
+      previousWindowDates: windows.previous,
     });
 
     // Find existing snapshot by (year, term, week)
@@ -515,10 +673,6 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
 
     let snapshotRef;
     let reusedExisting = false;
-
-    // Collect rollClass values for this snapshot across both code paths
-    const classSet = new Set();
-
 
     if (!existingSnapQS.empty) {
       // OVERWRITE path: reuse the existing snapshot doc for this label
@@ -534,7 +688,8 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
           year,
           term,
           week,
-          label
+          label,
+          metric: "mon-thu-roll-call",
         },
         { merge: true }
       );
@@ -558,45 +713,123 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
         year,
         term,
         week,
-        label
+        label,
+        metric: "mon-thu-roll-call",
       });
     }
 
+    const rosterById = await fetchRosterStudentMap(schoolRef);
+    if (!rosterById.size) {
+      return res.status(400).json({ error: "roster is empty; upload roster data before attendance reports" });
+    }
 
+    const classSet = new Set();
+    const currentDateSet = new Set(windows.current);
+    const previousDateSet = new Set(windows.previous);
+    const currentLateById = new Map();
+    const previousLateById = new Map();
+    const reportRollClassById = new Map();
+    let acceptedRows = 0;
+    let ignoredRows = 0;
 
-    // Now write rows for the current snapshot, computing trend vs previous
+    function ensureDateSet(map, externalId) {
+      const key = String(externalId).trim().replace(/\//g, "_");
+      if (!map.has(key)) map.set(key, new Set());
+      return map.get(key);
+    }
+
+    for (const row of records) {
+      const externalId = String(row[hExternal] ?? "").trim().replace(/\//g, "_");
+      const rollClass = String(row[hClass] ?? "").trim();
+      const date = normalizeReportDate(row[hDate]);
+
+      if (!externalId || !rollClass || !date) {
+        ignoredRows++;
+        continue;
+      }
+      if (!isUnexplainedLate(row[hShorthand], row[hDescription])) {
+        ignoredRows++;
+        continue;
+      }
+
+      if (currentDateSet.has(date)) {
+        ensureDateSet(currentLateById, externalId).add(date);
+        reportRollClassById.set(externalId, rollClass);
+        classSet.add(rollClass);
+        acceptedRows++;
+        continue;
+      }
+
+      if (previousDateSet.has(date)) {
+        ensureDateSet(previousLateById, externalId).add(date);
+        reportRollClassById.set(externalId, rollClass);
+        classSet.add(rollClass);
+        acceptedRows++;
+        continue;
+      }
+
+      ignoredRows++;
+    }
+
+    const studentUniverse = new Map(rosterById);
+    for (const [externalId, rollClass] of reportRollClassById.entries()) {
+      if (!studentUniverse.has(externalId)) {
+        studentUniverse.set(externalId, {
+          externalId,
+          rollClass: rollClass || null,
+          firstName: null,
+          surname: null,
+        });
+      }
+    }
+
+    const currentWindowDays = windows.current.length;
+    const previousWindowDays = windows.previous.length;
+
     const rowsColl = snapshotRef.collection("rows");
     let batch = db.batch();
     let inBatch = 0;
     let written = 0;
 
-    for (const r of records) {
-      const externalIdRaw = String(r[hExternal] ?? "").trim();
-      const rollClass = String(r[hClass] ?? "").trim();
-      if (!externalIdRaw || !rollClass) continue;
+    for (const student of studentUniverse.values()) {
+      const externalId = String(student.externalId).trim().replace(/\//g, "_");
+      const rollClass = reportRollClassById.get(externalId) || student.rollClass || "No Roll Class";
+      const currentLateDates = Array.from(currentLateById.get(externalId) || []).sort();
+      const previousLateDates = Array.from(previousLateById.get(externalId) || []).sort();
+      const currentLateDays = currentLateDates.length;
+      const previousLateDays = previousLateDates.length;
+      const pct = currentWindowDays > 0
+        ? clamp01(((currentWindowDays - currentLateDays) / currentWindowDays) * 100)
+        : null;
+
       classSet.add(rollClass);
 
-      const rawPct = String(r[hPct] ?? "").replace("%", "").trim();
-      const pct = Number(rawPct);
-      if (!Number.isFinite(pct)) continue;
-
-      const docId = externalIdRaw.replace(/\//g, "_");
-      const ref = rowsColl.doc(docId);
-
-       // REPLACE per-row payload with this minimal write:
-        const curr = clamp01(pct);
-        const rowData = {
-          externalId: externalIdRaw,
-          rollClass,
-          pctAttendance: curr
-        };
-        batch.set(ref, rowData, { merge: false });
-
-
+      const ref = rowsColl.doc(externalId);
+      batch.set(ref, {
+        externalId,
+        rollClass,
+        pctAttendance: pct,
+        lateDays: currentLateDays,
+        windowDays: currentWindowDays,
+        lateDates: currentLateDates,
+        metric: "mon-thu-roll-call",
+        metricMeta: {
+          year,
+          term,
+          week,
+          currentWindowDates: windows.current,
+          previousWindowDates: windows.previous,
+          previousWindowDays,
+          previousLateDays,
+          previousPctAttendance: previousWindowDays > 0
+            ? clamp01(((previousWindowDays - previousLateDays) / previousWindowDays) * 100)
+            : null,
+        },
+      }, { merge: false });
 
       inBatch++;
       written++;
-      if (inBatch === 500) {
+      if (inBatch >= 500) {
         await batch.commit();
         batch = db.batch();
         inBatch = 0;
@@ -604,12 +837,9 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
     }
     if (inBatch) await batch.commit();
 
-// REPLACE with: recompute term's latest-vs-previous trends and set pointer to true latest
-const { latestSnapshotId, compared } = await recomputeLatestTrendForTerm(db, schoolRef, year, term);
-await schoolRef.set({ latestSnapshotId: latestSnapshotId || snapshotRef.id }, { merge: true });
-
-// Recompute and persist the term leaderboard (cumulative + per-week)
-await recomputeAndStoreLeaderboardForTerm(db, SCHOOL_ID, year, term);
+    const { latestSnapshotId } = await recomputeLatestTrendForTerm(db, schoolRef, year, term);
+    await schoolRef.set({ latestSnapshotId: latestSnapshotId || snapshotRef.id }, { merge: true });
+    await recomputeAndStoreLeaderboardForTerm(db, SCHOOL_ID, year, term);
 
 
 
@@ -617,7 +847,13 @@ await recomputeAndStoreLeaderboardForTerm(db, SCHOOL_ID, year, term);
     await snapshotRef.set(
       {
         isLatest: true,
-        classList: Array.from(classSet).sort(), // ← snapshot-level class list
+        classList: Array.from(classSet).sort(),
+        metric: "mon-thu-roll-call",
+        metricLabel: "Mon-Thu roll-call score",
+        currentWindowDates: windows.current,
+        previousWindowDates: windows.previous,
+        currentWindowDays,
+        previousWindowDays,
       },
       { merge: true }
     );
@@ -626,7 +862,9 @@ await recomputeAndStoreLeaderboardForTerm(db, SCHOOL_ID, year, term);
       status: "processed",
       snapshotId: snapshotRef.id,
       rowCount: written,
-      reusedExisting
+      reusedExisting,
+      acceptedRows,
+      ignoredRows,
     });
 
     return res.json({
@@ -634,7 +872,12 @@ await recomputeAndStoreLeaderboardForTerm(db, SCHOOL_ID, year, term);
       snapshotId: snapshotRef.id,
       rowCount: written,
       label,
-      reusedExisting
+      reusedExisting,
+      currentWindowDates: windows.current,
+      previousWindowDates: windows.previous,
+      acceptedRows,
+      ignoredRows,
+      metric: "Mon-Thu roll-call score",
     });
   } catch (err) {
     console.error("Upload failed:", err);
@@ -715,6 +958,14 @@ app.get("/api/me/summary", requireAuth("student"), async (req, res) => {
 
     const pct = rowDoc.exists ? rowDoc.get("pctAttendance") : null;
     const trend = rowDoc.exists ? (rowDoc.get("trend") ?? null) : null;
+    let previousPct = null;
+    if (year && term) {
+      const { latest, prev } = await getTopTwoSnapshotRefs(schoolRef, year, term);
+      if (latest?.ref?.id === latestSnapshotId && prev?.ref) {
+        const prevRowDoc = await prev.ref.collection("rows").doc(String(externalId).replace(/\//g,"_")).get();
+        previousPct = prevRowDoc.exists ? (prevRowDoc.get("pctAttendance") ?? null) : null;
+      }
+    }
 
     const uploadedAt = snapDoc.get("uploadedAt");
     const updatedAtIso = uploadedAt?.toDate ? uploadedAt.toDate().toISOString() : null;
@@ -726,7 +977,8 @@ app.get("/api/me/summary", requireAuth("student"), async (req, res) => {
       surname: profile.surname ?? null,
       rollClass: profile.rollClass ?? (rowDoc.get("rollClass") ?? null),
       term: year && term ? `${year}-T${term}` : label,
-      ytdPercent: pct,        // can compute across terms later
+      snapshotLabel: label || (year && term && week ? `${year} Term ${term} Week ${week}` : null),
+      ytdPercent: previousPct,
       termPercent: pct,
       trend,
       version: `live-${latestSnapshotId}`,

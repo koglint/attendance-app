@@ -156,7 +156,7 @@ function renderSummary(s) {
   const name = [s.firstName, s.surname].filter(Boolean).join(" ");
   studentName.textContent = name || "Your profile";
   rollClass.textContent = `Roll: ${s.rollClass ?? "—"}`;
-  termLabel.textContent = s.term || "—";
+  termLabel.textContent = s.snapshotLabel || s.term || "—";
   termPercent.textContent = fmtPct(s.termPercent);
   ytdPercent.textContent = fmtPct(s.ytdPercent);
   trendBadge.textContent = fmtTrend(s.trend);
@@ -166,10 +166,10 @@ function renderSummary(s) {
     toggleWeeksBtn.onclick = () => {
       if (!weeks.classList.contains("hidden")) {
         show("weeks", false);
-        toggleWeeksBtn.textContent = "Show weekly detail";
+        toggleWeeksBtn.textContent = "Show weekly scores";
       } else {
         fetchWeeks(s.term);
-        toggleWeeksBtn.textContent = "Hide weekly detail";
+        toggleWeeksBtn.textContent = "Hide weekly scores";
       }
     };
   }

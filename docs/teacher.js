@@ -220,7 +220,7 @@ async function populateTerms() {
     const terms = await (await authedFetch("/api/terms")).json();
 
     if (!Array.isArray(terms) || terms.length === 0) {
-      setMsg(els.snapshotInfo, "No term data yet — ask admin to upload CSVs", "error");
+      setMsg(els.snapshotInfo, "No term data yet — ask admin to upload an absence report", "error");
       return;
     }
 
