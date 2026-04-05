@@ -22,67 +22,10 @@ const els = {
   checkMsg: document.getElementById("checkMsg"),
   checkOut: document.getElementById("checkOut"),
 
-  yearSelect: document.getElementById("yearSelect"),
-  termSelect: document.getElementById("termSelect"),
-  weekSelect: document.getElementById("weekSelect"),
-
   rosterFile: document.getElementById("rosterFile"),
   uploadRosterBtn: document.getElementById("uploadRosterBtn"),
   rosterUploadMsg: document.getElementById("rosterUploadMsg"),
 };
-
-const TERM_WEEK_COUNTS = Object.freeze({
-  1: 10,
-  2: 11,
-  3: 10,
-  4: 10,
-});
-
-function getMaxWeekInTerm(year, term) {
-  return TERM_WEEK_COUNTS[term] || 10;
-}
-
-function renderWeekOptions() {
-  if (!els.weekSelect) return;
-  const year = Number(els.yearSelect?.value);
-  const term = Number(els.termSelect?.value);
-  const maxWeek = getMaxWeekInTerm(year, term);
-  const current = Math.min(Number(els.weekSelect.value) || 1, maxWeek);
-  els.weekSelect.innerHTML = Array.from({ length: maxWeek }, (_, idx) => {
-    const week = idx + 1;
-    return `<option value="${week}">${week}</option>`;
-  }).join("");
-  els.weekSelect.value = String(current);
-}
-
-// Populate Year: currentYear-1 .. currentYear+1
-(function initYearTermWeek() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const years = [y - 1, y, y + 1];
-  if (els.yearSelect) {
-    els.yearSelect.innerHTML = years.map(v => `<option value="${v}">${v}</option>`).join("");
-    els.yearSelect.value = String(y);
-  }
-  const month = now.getMonth() + 1;
-  const guessTerm = month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4;
-  if (els.termSelect) els.termSelect.value = String(guessTerm);
-  renderWeekOptions();
-  if (els.yearSelect) {
-    els.yearSelect.disabled = true;
-    els.yearSelect.title = "Upload weeks are now inferred from the report dates.";
-  }
-  if (els.termSelect) {
-    els.termSelect.disabled = true;
-    els.termSelect.title = "Upload weeks are now inferred from the report dates.";
-  }
-  if (els.weekSelect) {
-    els.weekSelect.disabled = true;
-    els.weekSelect.title = "Upload weeks are now inferred from the report dates.";
-  }
-  els.yearSelect?.addEventListener("change", renderWeekOptions);
-  els.termSelect?.addEventListener("change", renderWeekOptions);
-})();
 
 function setMsg(el, text, kind="info") {
   if (!el) return;

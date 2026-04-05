@@ -113,41 +113,6 @@
             
             
             
-                    <!-- inside <fieldset> for the weekly report upload, before the file input -->
-                    <div style="display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap">
-                        <label>Year<br />
-                            <select id="yearSelect"></select>
-                        </label>
-            
-                        <label>Term<br />
-                            <select id="termSelect">
-                                <option value="1">Term 1</option>
-                                <option value="2">Term 2</option>
-                                <option value="3">Term 3</option>
-                                <option value="4">Term 4</option>
-                            </select>
-                        </label>
-            
-                        <label>Week<br />
-                            <select id="weekSelect">
-                                <!-- 1–12 (adjust if your school uses different ranges) -->
-                                <option>1</option>
-                                <option>2</option>
-                                <option>3</option>
-                                <option>4</option>
-                                <option>5</option>
-                                <option>6</option>
-                                <option>7</option>
-                                <option>8</option>
-                                <option>9</option>
-                                <option>10</option>
-                                <option>11</option>
-                                <option>12</option>
-                            </select>
-                        </label>
-                    </div>
-            
-            
                     <p class="muted">Upload the Sentral <code class="mono">absence_list</code> report. The backend only counts Mon-Thu rows where <code class="mono">Shorthand</code> is <code class="mono">U</code> and <code class="mono">Description</code> is <code class="mono">Unjustified</code>, or <code class="mono">Shorthand</code> is <code class="mono">?</code> and <code class="mono">Description</code> is <code class="mono">Absent</code>. Extra dates in the file are ignored.</p>
                     <input id="csvFile" type="file" accept=".xls,.xlsx,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" />
                     <button id="uploadBtn">Upload</button>
