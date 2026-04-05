@@ -68,6 +68,18 @@ function renderWeekOptions() {
   const guessTerm = month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4;
   if (els.termSelect) els.termSelect.value = String(guessTerm);
   renderWeekOptions();
+  if (els.yearSelect) {
+    els.yearSelect.disabled = true;
+    els.yearSelect.title = "Upload weeks are now inferred from the report dates.";
+  }
+  if (els.termSelect) {
+    els.termSelect.disabled = true;
+    els.termSelect.title = "Upload weeks are now inferred from the report dates.";
+  }
+  if (els.weekSelect) {
+    els.weekSelect.disabled = true;
+    els.weekSelect.title = "Upload weeks are now inferred from the report dates.";
+  }
   els.yearSelect?.addEventListener("change", renderWeekOptions);
   els.termSelect?.addEventListener("change", renderWeekOptions);
 })();
@@ -285,30 +297,12 @@ Auth.onChange(async (user) => {
       const fd = new FormData();
       fd.append("file", file, file.name);
 
-      // Add the snapshot labels
-      const year = Number(els.yearSelect?.value);
-      const term = Number(els.termSelect?.value);
-      const week = Number(els.weekSelect?.value);
-
-      if (!Number.isInteger(year) || year < 2000 || year > 2100)
-        return setMsg(els.uploadMsg, "Please choose a valid Year", "error");
-      if (![1, 2, 3, 4].includes(term))
-        return setMsg(els.uploadMsg, "Please choose a valid Term (1-4)", "error");
-      if (!Number.isInteger(week) || week < 1 || week > 12)
-        return setMsg(els.uploadMsg, "Please choose a valid Week (1-12)", "error");
-
-      fd.append("year", String(year));
-      fd.append("term", String(term));
-      fd.append("week", String(week));
-
       // Confirmation popup
       const proceed = window.confirm(
         `Are you sure you want to upload this absence report?\n\n` +
         `• File: ${file.name}\n` +
-        `• Year: ${year}\n` +
-        `• Term: ${term}\n` +
-        `• Week: ${week}\n\n` +
-        `This will rebuild the selected week's Mon-Thu roll-call score and may overwrite existing data for these labels.`
+        `The system will infer the correct term and week from the dates inside the file.\n\n` +
+        `This will rebuild that week's Mon-Thu roll-call score and may overwrite existing data for the inferred week.`
       );
       if (!proceed) {
         setMsg(els.uploadMsg, "Upload cancelled.");
@@ -330,8 +324,8 @@ Auth.onChange(async (user) => {
         return;
       }
 
-      const uploadMsg = data?.weekAdjusted
-        ? `Upload complete. Saved as Week ${data.week} because that is the last configured week in this term.`
+      const uploadMsg = data?.week
+        ? `Upload complete. Saved as ${data.label || `Week ${data.week}`}.`
         : "Upload complete";
       setMsg(els.uploadMsg, uploadMsg, "ok");
       if (els.uploadResult) els.uploadResult.textContent = JSON.stringify(data, null, 2);

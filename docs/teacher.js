@@ -22,6 +22,7 @@ const els = {
 
   yearSelect: document.getElementById("yearSelect"),
   termSelect: document.getElementById("termSelect"),
+  weekSelect: document.getElementById("weekSelect"),
   classSelect: document.getElementById("classSelect"),
   loadTermBtn: document.getElementById("loadTermBtn"),
   refreshBtn: document.getElementById("refreshBtn"),
@@ -34,6 +35,8 @@ const els = {
   toggleWeeks: document.getElementById("toggleWeeks"),
   compactGrid: document.getElementById("compactGrid"),
 };
+
+let availableTerms = [];
 
 function setSignInEnabled(on) {
   if (!els.signInBtn) return;
@@ -155,6 +158,17 @@ if (els.signInBtn) {
     els.refreshBtn.addEventListener("click", populateTerms);
     els.loadTermBtn.addEventListener("click", loadClassesForSelectedTerm);
     els.classSelect.addEventListener("change", loadRollupForClass);
+    els.yearSelect?.addEventListener("change", () => {
+      renderWeekOptions();
+      loadClassesForSelectedTerm();
+    });
+    els.termSelect?.addEventListener("change", () => {
+      renderWeekOptions();
+      loadClassesForSelectedTerm();
+    });
+    els.weekSelect?.addEventListener("change", () => {
+      if (els.classSelect?.value) loadRollupForClass();
+    });
     if (els.toggleWeeks) {
       els.toggleWeeks.addEventListener("change", () => {
         showWeeks = !!els.toggleWeeks.checked;
@@ -212,20 +226,59 @@ function displayLabelForRow(r) {
   return r?.externalId ?? "";
 }
 
+function renderWeekOptions(preferredWeek = null) {
+  if (!els.weekSelect) return;
+  const year = Number(els.yearSelect?.value);
+  const term = Number(els.termSelect?.value);
+  const entry = availableTerms.find((item) => item.year === year && item.term === term);
+  const weeks = Array.isArray(entry?.weeks) ? entry.weeks : [];
+  els.weekSelect.replaceChildren();
+  const latestOpt = document.createElement("option");
+  latestOpt.value = "";
+  latestOpt.textContent = "Latest available";
+  els.weekSelect.appendChild(latestOpt);
+  for (const week of weeks) {
+    const opt = document.createElement("option");
+    opt.value = String(week);
+    opt.textContent = `Week ${week}`;
+    els.weekSelect.appendChild(opt);
+  }
+  if (Number.isInteger(preferredWeek) && weeks.includes(preferredWeek)) {
+    els.weekSelect.value = String(preferredWeek);
+  } else {
+    els.weekSelect.value = "";
+  }
+}
+
+function buildSelectedWeekTrendMap(rows, weeks, selectedWeek) {
+  const weekIndex = weeks.indexOf(selectedWeek);
+  const fallbackIndex = weeks.length - 1;
+  const index = weekIndex >= 0 ? weekIndex : fallbackIndex;
+  const map = new Map();
+  rows.forEach((row) => {
+    map.set(String(row.externalId), {
+      trend: Array.isArray(row.weekTrends) ? (row.weekTrends[index] ?? null) : null,
+      meta: Array.isArray(row.weekTrendMeta) ? (row.weekTrendMeta[index] ?? null) : null,
+    });
+  });
+  return map;
+}
+
 
 // ====== Term & class loading ======
 async function populateTerms() {
   try {
     setMsg(els.snapshotInfo, "Loading terms…");
     const terms = await (await authedFetch("/api/terms")).json();
+    availableTerms = Array.isArray(terms) ? terms : [];
 
-    if (!Array.isArray(terms) || terms.length === 0) {
+    if (!availableTerms.length) {
       setMsg(els.snapshotInfo, "No term data yet — ask admin to upload an absence report", "error");
       return;
     }
 
     // Build Year options based on returned terms (safe)
-    const years = Array.from(new Set(terms.map(t => t.year))).sort((a, b) => b - a);
+    const years = Array.from(new Set(availableTerms.map(t => t.year))).sort((a, b) => b - a);
     els.yearSelect.replaceChildren();
     for (const y of years) {
       const opt = document.createElement("option");
@@ -235,13 +288,14 @@ async function populateTerms() {
     }
 
     // Choose latest term by default (first item is newest due to sort)
-    els.yearSelect.value = String(terms[0].year);
-    els.termSelect.value = String(terms[0].term);
+    els.yearSelect.value = String(availableTerms[0].year);
+    els.termSelect.value = String(availableTerms[0].term);
+    renderWeekOptions();
 
 
     // Show a quick “weeks present” note
-    const weeks = terms.find(t => t.year === terms[0].year && t.term === terms[0].term)?.weeks || [];
-    setMsg(els.snapshotInfo, `${terms[0].year} Term ${terms[0].term} • Weeks: ${weeks.join(", ")}`);
+    const weeks = availableTerms.find(t => t.year === availableTerms[0].year && t.term === availableTerms[0].term)?.weeks || [];
+    setMsg(els.snapshotInfo, `${availableTerms[0].year} Term ${availableTerms[0].term} • Weeks: ${weeks.join(", ")}`);
     await loadClassesForSelectedTerm();
   } catch (e) {
     setMsg(els.snapshotInfo, e.message || "Failed to load terms", "error");
@@ -257,6 +311,7 @@ async function loadClassesForSelectedTerm() {
   }
   try {
     setMsg(els.snapshotInfo, `Loading classes for ${year} Term ${term}…`);
+    renderWeekOptions();
     const classes = await (await authedFetch(`/api/terms/${year}/${term}/classes`)).json();
 
     if (!Array.isArray(classes) || classes.length === 0) {
@@ -297,7 +352,8 @@ async function loadClassesForSelectedTerm() {
 
   
 
-    setMsg(els.snapshotInfo, `${year} Term ${term} • ${classes.length} classes`);
+    const weeks = availableTerms.find((item) => item.year === year && item.term === term)?.weeks || [];
+    setMsg(els.snapshotInfo, `${year} Term ${term} • Weeks: ${weeks.join(", ") || "—"} • ${classes.length} classes`);
   } catch (e) {
     setMsg(els.snapshotInfo, e.message || "Failed to load classes", "error");
   }
@@ -462,14 +518,14 @@ async function loadRollupForClass() {
 
     const encRC = encodeURIComponent(rollClass);
 
-    // Fetch rollup (weeks + per-student week values) AND latest statuses in parallel
-    const [rollupResp, trendMap] = await Promise.all([
-      authedFetch(`/api/terms/${year}/${term}/classes/${encRC}/rollup`).then(r => r.json()),
-      fetchLatestTrends(rollClass).catch(() => new Map()),
-    ]);
+    // Fetch the full rollup for this term/class, then derive the selected week's status locally
+    const rollupResp = await authedFetch(`/api/terms/${year}/${term}/classes/${encRC}/rollup`).then(r => r.json());
 
     const weeks = Array.isArray(rollupResp.weeks) ? rollupResp.weeks.slice(0, 12) : [];
     const rows  = Array.isArray(rollupResp.rows)  ? rollupResp.rows : [];
+    renderWeekOptions(Number(els.weekSelect?.value));
+    const selectedWeek = Number(els.weekSelect?.value) || (weeks[weeks.length - 1] ?? null);
+    const trendMap = buildSelectedWeekTrendMap(rows, weeks, selectedWeek);
 
 
 
@@ -566,7 +622,7 @@ async function loadRollupForClass() {
 
 setMsg(
   els.tableMsg,
-  `${rows.length} students • Weeks: ${weeks.join(", ") || "—"} • Status based on days on time this week`,
+  `${rows.length} students • Weeks: ${weeks.join(", ") || "—"} • Status shown for ${selectedWeek ? `Week ${selectedWeek}` : "the latest available week"}`,
   "ok"
 );
 

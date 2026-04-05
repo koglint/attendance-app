@@ -26,6 +26,10 @@ const retryBtn    = $("retryBtn");
 const summary     = $("summary");
 const studentName = $("studentName");
 const rollClass   = $("rollClass");
+const yearSelect  = $("yearSelect");
+const termSelect  = $("termSelect");
+const weekSelect  = $("weekSelect");
+const loadWeekBtn = $("loadWeekBtn");
 const termLabel   = $("termLabel");
 const termPercent = $("termPercent");
 const ytdPercent  = $("ytdPercent");
@@ -42,6 +46,7 @@ if (!weeksTableEl) console.warn("#weeksTable missing");
 
 // ---- State ----
 let currentSummary = null;
+let availableTerms = [];
 
 // ---- Auth UI (compat) ----
 const provider = new firebase.auth.GoogleAuthProvider();
@@ -63,13 +68,25 @@ if (signInBtn) signInBtn.onclick = async () => {
 
 if (signOutBtn) signOutBtn.onclick = async () => { await auth.signOut(); };
 
-if (retryBtn) retryBtn.onclick = () => { auth.currentUser ? fetchSummary() : showSignedOut(); };
+if (retryBtn) retryBtn.onclick = () => { auth.currentUser ? initStudentView() : showSignedOut(); };
+if (yearSelect) yearSelect.onchange = () => renderWeekOptions(Number(yearSelect.value), Number(termSelect?.value), Number(weekSelect?.value));
+if (termSelect) termSelect.onchange = () => renderWeekOptions(Number(yearSelect?.value), Number(termSelect.value), Number(weekSelect?.value));
+if (loadWeekBtn) loadWeekBtn.onclick = () => {
+  fetchSummary({
+    year: Number(yearSelect?.value),
+    term: Number(termSelect?.value),
+    week: Number(weekSelect?.value),
+  });
+  if (weeks && !weeks.classList.contains("hidden")) {
+    fetchWeeks(`${yearSelect?.value}-T${termSelect?.value}`);
+  }
+};
 
 // ---- Auth state ----
 auth.onAuthStateChanged((user) => {
   if (!user) { showSignedOut(); return; }
   showSignedIn();
-  fetchSummary();
+  initStudentView();
 });
 
 // ---- UI state helpers ----
@@ -114,10 +131,95 @@ async function authedFetch(path) {
   return res;
 }
 
-async function fetchSummary() {
+async function fetchAvailableTerms() {
+  const res = await authedFetch("/api/me/terms");
+  if (!res.ok) {
+    await handleHttpError(res, "Could not load your available terms.");
+    return null;
+  }
+  return res.json();
+}
+
+function setSelectedWeekFromState(year, term, week) {
+  if (yearSelect) yearSelect.value = String(year ?? "");
+  if (termSelect) termSelect.value = String(term ?? "");
+  renderWeekOptions(year, term, week);
+}
+
+function renderWeekOptions(year, term, preferredWeek) {
+  if (!weekSelect) return;
+  const entry = availableTerms.find((item) => item.year === Number(year) && item.term === Number(term));
+  const weeks = Array.isArray(entry?.weeks) ? entry.weeks : [];
+  weekSelect.replaceChildren();
+  for (const week of weeks) {
+    const opt = document.createElement("option");
+    opt.value = String(week);
+    opt.textContent = `Week ${week}`;
+    weekSelect.appendChild(opt);
+  }
+  if (weeks.length) {
+    const nextWeek = weeks.includes(Number(preferredWeek)) ? Number(preferredWeek) : weeks[weeks.length - 1];
+    weekSelect.value = String(nextWeek);
+  }
+}
+
+function renderTermSelectors(latest) {
+  const years = Array.from(new Set(availableTerms.map((item) => item.year))).sort((a, b) => b - a);
+  if (yearSelect) {
+    yearSelect.replaceChildren();
+    for (const year of years) {
+      const opt = document.createElement("option");
+      opt.value = String(year);
+      opt.textContent = String(year);
+      yearSelect.appendChild(opt);
+    }
+  }
+  if (termSelect) {
+    termSelect.replaceChildren();
+    for (const term of [1, 2, 3, 4]) {
+      const opt = document.createElement("option");
+      opt.value = String(term);
+      opt.textContent = `Term ${term}`;
+      termSelect.appendChild(opt);
+    }
+  }
+  if (latest) setSelectedWeekFromState(latest.year, latest.term, latest.week);
+}
+
+async function initStudentView() {
   try {
     show("loading", true);
-    const res = await authedFetch("/api/me/summary");
+    const termData = await fetchAvailableTerms();
+    if (!termData) {
+      show("loading", false);
+      return;
+    }
+    availableTerms = Array.isArray(termData.terms) ? termData.terms : [];
+    if (!availableTerms.length) {
+      throw new Error("No term data available yet.");
+    }
+    renderTermSelectors(termData.latest || null);
+    await fetchSummary({
+      year: termData.latest?.year,
+      term: termData.latest?.term,
+      week: termData.latest?.week,
+    });
+  } catch (e) {
+    show("loading", false);
+    show("errorBox", true);
+    errorText.textContent = friendlyError(e) || "Something went wrong.";
+  }
+}
+
+async function fetchSummary(selection = {}) {
+  try {
+    show("loading", true);
+    const params = new URLSearchParams();
+    if (Number.isInteger(selection.year)) params.set("year", String(selection.year));
+    if ([1, 2, 3, 4].includes(selection.term)) params.set("term", String(selection.term));
+    if (Number.isInteger(selection.week)) params.set("week", String(selection.week));
+    const path = params.size ? `/api/me/summary?${params.toString()}` : "/api/me/summary";
+    const res = await authedFetch(path);
     if (!res.ok) {
       await handleHttpError(res, "Could not load your summary.");
       show("loading", false);
@@ -125,6 +227,7 @@ async function fetchSummary() {
     }
     const data = await res.json();
     currentSummary = data;
+    setSelectedWeekFromState(data.year, data.term ? Number(String(data.term).split("-T")[1] || selection.term) : selection.term, data.week);
     renderSummary(data);
     show("loading", false);
     show("summary", true);
