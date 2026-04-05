@@ -221,6 +221,13 @@ function getTermBounds(year, term) {
   return start && end ? { start, end } : null;
 }
 
+function getMaxWeekInTerm(year, term) {
+  const bounds = getTermBounds(year, term);
+  if (!bounds) return null;
+  const diffDays = Math.floor((bounds.end.getTime() - bounds.start.getTime()) / 86400000);
+  return Math.floor(diffDays / 7) + 1;
+}
+
 function getWeekWindowDates(year, term, week) {
   const bounds = getTermBounds(year, term);
   if (!bounds) return null;
@@ -566,16 +573,22 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
     // Year/Term/Week (from form fields sent by the admin page)
     const year = Number(req.body?.year);
     const term = Number(req.body?.term);
-    const week = Number(req.body?.week);
+    const requestedWeek = Number(req.body?.week);
     if (!Number.isInteger(year) || year < 2000 || year > 2100) {
       return res.status(400).json({ error: "invalid year" });
     }
     if (![1, 2, 3, 4].includes(term)) {
       return res.status(400).json({ error: "invalid term (1–4)" });
     }
-    if (!Number.isInteger(week) || week < 1 || week > 12) {
+    if (!Number.isInteger(requestedWeek) || requestedWeek < 1 || requestedWeek > 12) {
       return res.status(400).json({ error: "invalid week (1–12)" });
     }
+    const maxWeek = getMaxWeekInTerm(year, term);
+    if (!maxWeek) {
+      return res.status(400).json({ error: `no term calendar configured for ${year} term ${term}` });
+    }
+    const week = Math.min(requestedWeek, maxWeek);
+    const weekAdjusted = week !== requestedWeek;
     const label = `${year} Term ${term} Week ${week}`;
     const windows = getWeekWindowDates(year, term, week);
     if (!windows) {
@@ -631,6 +644,8 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
       year,
       term,
       week,
+      requestedWeek,
+      weekAdjusted,
       label,
       sourceType: parsedUpload.sourceType,
       sourceSheet: parsedUpload.sheetName,
@@ -664,6 +679,7 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
           year,
           term,
           week,
+          requestedWeek,
           label,
           metric: "mon-thu-roll-call",
         },
@@ -689,6 +705,7 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
         year,
         term,
         week,
+        requestedWeek,
         label,
         metric: "mon-thu-roll-call",
       });
@@ -841,6 +858,8 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
       reusedExisting,
       acceptedRows,
       ignoredRows,
+      requestedWeek,
+      weekAdjusted,
     });
 
     return res.json({
@@ -848,6 +867,9 @@ app.post("/api/uploads", requireAuth("admin"), upload.single("file"), async (req
       snapshotId: snapshotRef.id,
       rowCount: written,
       label,
+      requestedWeek,
+      week,
+      weekAdjusted,
       reusedExisting,
       currentWindowDates: windows.current,
       previousWindowDates: windows.previous,
