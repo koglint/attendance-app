@@ -156,29 +156,25 @@
 
         .wheel-panel {
             display: grid;
-            grid-template-rows: auto auto 1fr auto;
+            grid-template-rows: auto 1fr auto auto;
             gap: 10px;
             justify-items: center;
         }
 
-        .action-row {
+        .wheel-head {
             width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            padding: 10px 12px;
-            border-radius: 14px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid var(--line);
+            display: grid;
+            gap: 4px;
+            padding: 4px 2px 0;
+            text-align: left;
         }
 
-        .action-row strong {
+        .wheel-head strong {
             display: block;
-            font-size: 0.92rem;
+            font-size: 1rem;
         }
 
-        .action-row span {
+        .wheel-head span {
             color: var(--muted);
             font-size: 0.82rem;
         }
@@ -200,6 +196,7 @@
             place-items: center;
             min-height: 0;
             padding: 4px;
+            position: relative;
         }
 
         canvas {
@@ -210,6 +207,29 @@
             background: #f6f7fb;
             border-radius: 50%;
             box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
+        }
+
+        .wheel-spin {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 112px;
+            height: 112px;
+            border-radius: 50%;
+            border: 6px solid rgba(255, 255, 255, 0.94);
+            background: radial-gradient(circle at 30% 30%, #ffe37f, var(--accent) 68%, #e0a600 100%);
+            color: #18232f;
+            font-size: 1.2rem;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
+            z-index: 3;
+        }
+
+        .wheel-spin:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
         }
 
         .wheel-note {
@@ -407,7 +427,7 @@
 
             .topbar,
             .nav,
-            .action-row {
+            .wheel-head {
                 align-items: flex-start;
                 flex-direction: column;
             }
@@ -415,6 +435,12 @@
             .controls,
             .student-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .wheel-spin {
+                width: 92px;
+                height: 92px;
+                font-size: 1rem;
             }
         }
     </style>
@@ -468,17 +494,15 @@
 
         <section class="content">
             <section class="panel wheel-panel">
-                <div class="action-row">
-                    <div>
-                        <strong id="boardInfo">No class loaded yet.</strong>
-                        <span id="winnerDisplay">Load a class to start.</span>
-                    </div>
-                    <button id="spinButton" type="button">Spin Wheel</button>
+                <div class="wheel-head">
+                    <strong id="boardInfo">No class loaded yet.</strong>
+                    <span id="winnerDisplay">Load a class to start.</span>
                 </div>
-                <div class="winner-result" id="winnerResult">No winner selected yet.</div>
                 <div class="wheel-wrap">
                     <canvas id="wheelCanvas" width="840" height="840"></canvas>
+                    <button id="spinButton" class="wheel-spin" type="button">Spin</button>
                 </div>
+                <div class="winner-result" id="winnerResult">No winner selected yet.</div>
                 <div class="wheel-note">
                     <div id="weightInfo" class="weights"></div>
                 </div>
