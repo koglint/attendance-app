@@ -231,21 +231,17 @@ function renderWeekOptions(preferredWeek = null) {
   const entry = availableTerms.find((item) => item.year === year && item.term === term);
   const weeks = Array.isArray(entry?.weeks) ? entry.weeks : [];
   els.weekSelect.replaceChildren();
-  const latestOpt = document.createElement("option");
-  latestOpt.value = "";
-  latestOpt.textContent = "Latest available";
-  els.weekSelect.appendChild(latestOpt);
   for (const week of weeks) {
     const opt = document.createElement("option");
     opt.value = String(week);
     opt.textContent = `Week ${week}`;
     els.weekSelect.appendChild(opt);
   }
-  if (Number.isInteger(preferredWeek) && weeks.includes(preferredWeek)) {
-    els.weekSelect.value = String(preferredWeek);
-  } else {
-    els.weekSelect.value = "";
-  }
+  const fallbackWeek = weeks.length ? weeks[weeks.length - 1] : null;
+  const targetWeek = Number.isInteger(preferredWeek) && weeks.includes(preferredWeek)
+    ? preferredWeek
+    : fallbackWeek;
+  els.weekSelect.value = targetWeek != null ? String(targetWeek) : "";
 }
 
 function buildSelectedWeekTrendMap(rows, weeks, selectedWeek) {

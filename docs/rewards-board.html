@@ -99,6 +99,12 @@
             font-size: 0.82rem;
         }
 
+        .tag.active {
+            background: var(--accent);
+            color: #18232f;
+            border-color: transparent;
+        }
+
         .controls {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -461,10 +467,11 @@
                 <span>Rewards Board</span>
             </div>
             <nav class="nav">
-                <a class="tag" href="./rewards-board.html">Board</a>
+                <a class="tag active" href="./rewards-board.html">Board</a>
                 <a class="tag" href="./teacher.html">Attendance Data</a>
                 <a class="tag" href="./leaderboard.html">Leaderboard</a>
                 <a class="tag" href="./admin.html">Admin</a>
+                <a class="tag" href="./faq.html">FAQs</a>
             </nav>
         </section>
 
@@ -482,7 +489,6 @@
             </label>
             <label>Week
                 <select id="weekSelect">
-                    <option value="">Latest available</option>
                 </select>
             </label>
             <label>Roll Class
@@ -529,7 +535,6 @@
             <div class="popup-burst">***</div>
             <h2>Winner!</h2>
             <div id="popupWinnerName" class="popup-name">-</div>
-            <p id="popupWinnerText">What a moment.</p>
             <button id="closePopupBtn" type="button">Close</button>
         </div>
     </div>

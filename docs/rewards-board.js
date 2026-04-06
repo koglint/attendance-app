@@ -16,7 +16,6 @@ const els = {
   loadingOverlay: document.getElementById("loadingOverlay"),
   winnerPopup: document.getElementById("winnerPopup"),
   popupWinnerName: document.getElementById("popupWinnerName"),
-  popupWinnerText: document.getElementById("popupWinnerText"),
   closePopupBtn: document.getElementById("closePopupBtn"),
 };
 
@@ -88,7 +87,6 @@ function setLoading(isLoading) {
 function showWinnerPopup(student) {
   if (!els.winnerPopup) return;
   els.popupWinnerName.textContent = student.name;
-  els.popupWinnerText.textContent = "What a moment.";
   els.winnerPopup.classList.add("show");
   els.winnerPopup.setAttribute("aria-hidden", "false");
 }
@@ -122,23 +120,23 @@ function renderWeightInfo() {
   els.weightInfo.appendChild(frag);
 }
 
-function renderWeekOptions(preferredWeek = "") {
+function renderWeekOptions(preferredWeek = null) {
   const year = Number(els.yearSelect.value);
   const term = Number(els.termSelect.value);
   const entry = availableTerms.find((item) => item.year === year && item.term === term);
   const weeks = Array.isArray(entry?.weeks) ? entry.weeks : [];
   els.weekSelect.replaceChildren();
-  const latest = document.createElement("option");
-  latest.value = "";
-  latest.textContent = "Latest available";
-  els.weekSelect.appendChild(latest);
   for (const week of weeks) {
     const opt = document.createElement("option");
     opt.value = String(week);
     opt.textContent = `Week ${week}`;
     els.weekSelect.appendChild(opt);
   }
-  els.weekSelect.value = weeks.includes(Number(preferredWeek)) ? String(preferredWeek) : "";
+  const fallbackWeek = weeks.length ? weeks[weeks.length - 1] : null;
+  const targetWeek = Number.isInteger(preferredWeek) && weeks.includes(preferredWeek)
+    ? preferredWeek
+    : fallbackWeek;
+  els.weekSelect.value = targetWeek != null ? String(targetWeek) : "";
 }
 
 function renderStudentList(rows) {

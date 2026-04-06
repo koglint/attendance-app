@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <base href="./" />
+    <title>FAQs - Attendance App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            margin: 1rem 2rem;
+            background: #274472;
+            color: #fff;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .brand {
+            display: flex;
+            gap: .75rem;
+            align-items: baseline;
+            flex-wrap: wrap;
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: 1.2rem;
+        }
+
+        .brand span {
+            opacity: .85;
+            font-size: .85rem;
+        }
+
+        .nav {
+            display: flex;
+            gap: .5rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .tag {
+            border: 1px solid #e7f802;
+            border-radius: 999px;
+            padding: .3rem .6rem;
+            text-decoration: none;
+            color: #fff;
+            font-size: .85rem;
+        }
+
+        .tag.active {
+            background: #e7f802;
+            color: #274472;
+            border-color: #e7f802;
+        }
+
+        .card {
+            border: 1px solid #e7f802;
+            border-radius: 16px;
+            padding: 1rem 1.2rem;
+            margin: 1rem 0;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        h2 {
+            margin: 0 0 .4rem;
+            font-size: 1.05rem;
+        }
+
+        p {
+            margin: .35rem 0 0;
+            line-height: 1.45;
+        }
+
+        code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="brand">
+            <h1>Attendance App</h1>
+            <span>FAQs</span>
+        </div>
+        <nav class="nav">
+            <a class="tag" href="./rewards-board.html">Board</a>
+            <a class="tag" href="./teacher.html">Attendance Data</a>
+            <a class="tag" href="./leaderboard.html">Leaderboard</a>
+            <a class="tag" href="./admin.html">Admin</a>
+            <a class="tag active" href="./faq.html">FAQs</a>
+        </nav>
+    </header>
+
+    <section class="card">
+        <h2>What file do I upload for attendance?</h2>
+        <p>Upload the Sentral <code>absence_list</code> export on the Admin page. The app accepts <code>.xls</code>, <code>.xlsx</code>, and <code>.csv</code>.</p>
+    </section>
+
+    <section class="card">
+        <h2>Do I need to pick the term or week before uploading?</h2>
+        <p>No. The backend reads the dates inside the uploaded report and infers the correct year, term, and week automatically.</p>
+    </section>
+
+    <section class="card">
+        <h2>How is a missed roll call counted?</h2>
+        <p>A row counts when the absence is unexplained and the time indicates the student missed morning roll call. Unexplained full-day absences also count as missed roll call.</p>
+    </section>
+
+    <section class="card">
+        <h2>Why might a student still get a good status if they are not in the report?</h2>
+        <p>The roster is treated as the full student list. If a rostered student does not appear in the uploaded absence report for that week, the app treats them as present and on time.</p>
+    </section>
+
+    <section class="card">
+        <h2>What do the statuses mean?</h2>
+        <p><code>goat</code> means on time 4 out of 4 days, <code>sad1</code> means 3 out of 4, <code>sad2</code> means 2 out of 4, <code>sad3</code> means 1 out of 4, and <code>sad4</code> means 0 out of 4.</p>
+    </section>
+
+    <section class="card">
+        <h2>What should I upload first?</h2>
+        <p>Upload the roster first, then upload attendance reports. The roster provides the roll classes, aliases, and student identities used during attendance processing.</p>
+    </section>
+</body>
+
+</html>

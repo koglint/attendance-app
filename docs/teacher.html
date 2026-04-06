@@ -59,6 +59,12 @@
             font-size: .85rem;
         }
 
+        .tag.active {
+            background: #e7f802;
+            color: #274472;
+            border-color: #e7f802;
+        }
+
         fieldset {
             border: 1px solid #e7f802;
             padding: 1rem;
@@ -343,9 +349,10 @@
         </div>
         <div class="nav">
             <a class="tag" href="./rewards-board.html">Board</a>
-            <a class="tag" href="./teacher.html">Attendance Data</a>
+            <a class="tag active" href="./teacher.html">Attendance Data</a>
             <a class="tag" href="./leaderboard.html">Leaderboard</a>
             <a class="tag" href="./admin.html">Admin</a>
+            <a class="tag" href="./faq.html">FAQs</a>
             <span id="whoami" class="muted"></span>
             <button id="signOutBtn" style="display:none;">Sign out</button>
         </div>
@@ -411,7 +418,6 @@
 
         <label>Week<br />
             <select id="weekSelect">
-                <option value="">Latest available</option>
             </select>
         </label>
 
