@@ -72,6 +72,9 @@ function renderLeaderboard(list) {
     const tdRoll = document.createElement("td");
     tdRoll.textContent = row.rollId || row.rollClass || "";
 
+    const tdStudents = document.createElement("td");
+    tdStudents.textContent = String(row.studentCount ?? 0);
+
     const tdNorm = document.createElement("td");
     tdNorm.className = "right";
     tdNorm.textContent = Number(row.normPoints ?? 0).toFixed(2);
@@ -91,7 +94,7 @@ function renderLeaderboard(list) {
     const tdSad4 = document.createElement("td");
     tdSad4.textContent = row.counts?.sad4 ?? 0;
 
-    tr.append(tdRank, tdRoll, tdNorm, tdGoat, tdSad1, tdSad2, tdSad3, tdSad4);
+    tr.append(tdRank, tdRoll, tdStudents, tdNorm, tdGoat, tdSad1, tdSad2, tdSad3, tdSad4);
     tbody.appendChild(tr);
   });
 }
