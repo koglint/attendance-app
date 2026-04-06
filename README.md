@@ -4,7 +4,7 @@ Attendance App is a web app for tracking Monday to Thursday roll-call attendance
 
 ## What The Site Does
 
-The app has 4 main pages in `docs/`:
+The app has 5 main pages in `docs/`:
 
 - `rewards-board.html`
   This is the main landing page after login. It shows the weighted rewards wheel and the current student status board for a selected year, term, week, and roll class.
@@ -14,6 +14,8 @@ The app has 4 main pages in `docs/`:
   This shows roll-class rankings for a selected term.
 - `admin.html`
   This is where roster files and attendance report files are uploaded.
+- `faq.html`
+  This is a quick-reference page for common questions about uploads, status rules, and how the app behaves.
 
 The backend lives in `backend/server.js` and stores data in Firestore.
 
@@ -119,6 +121,7 @@ If the attendance logic has changed significantly, it is safest to clear old att
 It shows:
 
 - the current selected year, term, week, and roll class
+- the most recent available week preselected in the week dropdown
 - every student in the selected roll class
 - each student's current status icon
 - a weighted prize wheel, where stronger attendance statuses have better odds
@@ -154,6 +157,10 @@ It shows:
 - uploading roster data
 - uploading attendance reports
 - running quick checks against the current stored data
+
+### FAQs
+
+`faq.html` is a simple help page for common staff questions about roster uploads, attendance uploads, and status calculation.
 
 ## Local Structure
 
