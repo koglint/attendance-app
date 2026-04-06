@@ -558,7 +558,7 @@ function statusFromDaysOnTime(daysOnTime, windowDays) {
 
 
 // ===== Leaderboard aggregation (term) =====
-const BADGE_POINTS = { sad4: 0, sad3: 1, sad2: 2, sad1: 3, goat: 4 };
+const BADGE_POINTS = { sad4: 0, sad3: 1, sad2: 5, sad1: 10, goat: 50 };
 const TREND_TO_POINTS = BADGE_POINTS;
 const MAX_WEEKS = 12;
 
@@ -1068,8 +1068,29 @@ app.get("/api/leaderboard", requireAuth("teacher"), async (req, res) => {
     const doc = await db.collection("schools").doc(SCHOOL_ID)
       .collection("terms").doc(termId)
       .collection("leaderboard").doc("current").get();
-    if (!doc.exists) return res.json({ ok: true, year, term, weeks: [], leaderboard: [] });
+    if (!doc.exists) {
+      const rebuilt = await aggregateTermLeaderboard(db, SCHOOL_ID, year, term);
+      await writeTermLeaderboard(db, SCHOOL_ID, year, term, rebuilt);
+      return res.json({
+        ok: true,
+        year,
+        term,
+        weeks: rebuilt.weeks || [],
+        leaderboard: rebuilt.leaderboard || []
+      });
+    }
     const data = doc.data() || {};
+    if (!Array.isArray(data.leaderboard)) {
+      const rebuilt = await aggregateTermLeaderboard(db, SCHOOL_ID, year, term);
+      await writeTermLeaderboard(db, SCHOOL_ID, year, term, rebuilt);
+      return res.json({
+        ok: true,
+        year,
+        term,
+        weeks: rebuilt.weeks || [],
+        leaderboard: rebuilt.leaderboard || []
+      });
+    }
     return res.json({ ok: true, year, term, weeks: data.weeks || [], leaderboard: data.leaderboard || [] });
   } catch (e) {
     return sendFirestoreError(res, e, "failed to load leaderboard");

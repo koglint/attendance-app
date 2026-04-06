@@ -91,6 +91,11 @@ function renderLeaderboard(weeks, list) {
   const tbody = els.board.querySelector("tbody");
   tbody.innerHTML = "";
 
+  if (!list.length) {
+    els.status.textContent = "No leaderboard data available for that term yet.";
+    return;
+  }
+
   list.forEach((row, idx) => {
     const tr = document.createElement("tr");
 
@@ -101,11 +106,11 @@ function renderLeaderboard(weeks, list) {
     tdRank.textContent = String(idx + 1);
 
     const tdRoll = document.createElement("td");
-    tdRoll.textContent = row.rollId;
+    tdRoll.textContent = row.rollId || row.rollClass || "";
 
     const tdNorm = document.createElement("td");
     tdNorm.className = "right";
-    tdNorm.textContent = (Number(row.normPoints * 1000 ?? 0)).toFixed(0);
+    tdNorm.textContent = Number(row.normPoints ?? 0).toFixed(2);
 
     const tdGoat = document.createElement("td");
     tdGoat.textContent = row.counts?.goat ?? 0;
@@ -176,7 +181,7 @@ if (!token) {
       const weeks = data.weeks || [];
       const list = (data.leaderboard || []).slice(); // already sorted by server
       renderLeaderboard(weeks, list);
-      els.status.textContent = `Updated ${new Date().toLocaleString()}`;
+      if (list.length) els.status.textContent = `Updated ${new Date().toLocaleString()}`;
     } catch (e) {
       console.error(e);
       els.status.textContent = "Failed to load leaderboard.";
