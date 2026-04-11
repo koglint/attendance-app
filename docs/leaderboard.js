@@ -131,7 +131,7 @@ async function init() {
   const { user, token } = await getUserAndToken();
 
   if (!user) {
-    els.status.textContent = "Not signed in. Open Attendance Data and sign in.";
+    els.status.textContent = "Not signed in. Open Attendance Data and sign in there first.";
     return;
   }
   if (!token) {

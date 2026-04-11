@@ -19,10 +19,14 @@ async function lookupAllowlist(emailRaw) {
   const snap = await ref.get();
   if (!snap.exists) return null;
 
-  // You already store { studentId } from roster upload
+  const role = snap.get("role") || null;
   const studentId = snap.get("studentId") || null;
-  // (Optionally support a role field later)
-  return studentId ? { studentId } : null;
+  if (!role && !studentId) return null;
+
+  return {
+    role: role || "student",
+    studentId: studentId || null,
+  };
 }
 
 // Block account creation for anyone not in email_lookup
@@ -48,10 +52,13 @@ exports.gateBeforeCreate = beforeUserCreated(
     const uid = event.data.uid;
     const userRef = db.collection("schools").doc(SCHOOL_ID)
                       .collection("users").doc(uid);
+    const existingUserDoc = await userRef.get();
+    const existingRole = existingUserDoc.exists ? existingUserDoc.get("role") : null;
+    const role = existingRole || allow.role || "student";
 
     await userRef.set({
-      role: "student",
-      externalId: allow.studentId,
+      role,
+      externalId: allow.studentId || null,
       email,
       createdAt: FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -89,14 +96,14 @@ exports.gateBeforeSignIn = beforeUserSignedIn(
       throw new Error("account-suspended");
     }
 
-    const role = (userDoc.get && userDoc.get("role")) || "student";
+    const role = (userDoc.get && userDoc.get("role")) || allow.role || "student";
 
     // Session claims are handy for your backend or client-side gating
     return {
       sessionClaims: {
         role,
         schoolId: SCHOOL_ID,
-        studentId: allow.studentId,
+        studentId: allow.studentId || null,
       }
     };
   }

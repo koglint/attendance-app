@@ -115,11 +115,6 @@ function formatUploadedAt(uploadedAt) {
     // 2) Now wire auth listeners
     auth.onAuthStateChanged(async (user) => {
       if (!user) return showSignedOutUI();
-      if (sessionStorage.getItem("teacherPostLoginRedirect") === "1") {
-        sessionStorage.removeItem("teacherPostLoginRedirect");
-        window.location.replace("./rewards-board.html");
-        return;
-      }
       showAuthedUI(user);
       await populateTerms();
     });
@@ -137,11 +132,9 @@ if (els.authForm) {
       // fetch auth on demand so this works even if init was slow
       const ready = await (window.firebaseReady || Promise.reject(new Error("firebaseReady missing")));
       const authNow = ready.auth || window.firebaseAuth;
-      sessionStorage.setItem("teacherPostLoginRedirect", "1");
       await authNow.signInWithEmailAndPassword(email, password);
       setMsg(els.authMsg, "Signed in", "ok");
     } catch (err) {
-      sessionStorage.removeItem("teacherPostLoginRedirect");
       console.error("[auth] signIn error:", err);
       setMsg(els.authMsg, "Sign-in failed. Check your credentials.", "error");
     }

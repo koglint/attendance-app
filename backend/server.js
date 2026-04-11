@@ -1167,31 +1167,60 @@ app.get("/api/me/summary", requireAuth("student"), async (req, res) => {
 
     const pct = rowDoc.exists ? rowDoc.get("pctAttendance") : null;
     const trend = rowDoc.exists ? (rowDoc.get("trend") ?? null) : null;
-    let previousPct = null;
-    if (year && term) {
-      const snapsQS = await schoolRef.collection("snapshots")
+    let termPercent = pct;
+    let ytdPercent = pct;
+    if (year && term && Number.isInteger(week)) {
+      const yearSnapshotsQS = await schoolRef.collection("snapshots")
         .where("year", "==", year)
-        .where("term", "==", term)
         .get();
-      let prevRef = null;
-      let prevWeek = -Infinity;
-      snapsQS.forEach((d) => {
-        const candidateWeek = d.get("week");
-        if (Number.isInteger(candidateWeek) && candidateWeek < week && candidateWeek > prevWeek) {
-          prevWeek = candidateWeek;
-          prevRef = d.ref;
+
+      const snapshotItems = yearSnapshotsQS.docs
+        .map((d) => ({
+          doc: d,
+          term: d.get("term"),
+          week: d.get("week"),
+        }))
+        .filter((item) => Number.isInteger(item.term) && Number.isInteger(item.week))
+        .sort((a, b) => (a.term - b.term) || (a.week - b.week));
+
+      let ytdWindowDays = 0;
+      let ytdLateDays = 0;
+      let termWindowDays = 0;
+      let termLateDays = 0;
+
+      for (const item of snapshotItems) {
+        if (item.term > term || (item.term === term && item.week > week)) continue;
+
+        const studentRowDoc = await item.doc.ref
+          .collection("rows")
+          .doc(String(externalId).replace(/\//g,"_"))
+          .get();
+        if (!studentRowDoc.exists) continue;
+
+        const windowDays = Number(studentRowDoc.get("windowDays") ?? 0);
+        const lateDays = Number(studentRowDoc.get("lateDays") ?? 0);
+        if (!Number.isFinite(windowDays) || windowDays <= 0 || !Number.isFinite(lateDays)) continue;
+
+        ytdWindowDays += windowDays;
+        ytdLateDays += lateDays;
+
+        if (item.term === term) {
+          termWindowDays += windowDays;
+          termLateDays += lateDays;
         }
-      });
-      if (prevRef) {
-        const prevRowDoc = await prevRef.collection("rows").doc(String(externalId).replace(/\//g,"_")).get();
-        previousPct = prevRowDoc.exists ? (prevRowDoc.get("pctAttendance") ?? null) : null;
+      }
+
+      if (termWindowDays > 0) {
+        termPercent = clamp01(((termWindowDays - termLateDays) / termWindowDays) * 100);
+      }
+      if (ytdWindowDays > 0) {
+        ytdPercent = clamp01(((ytdWindowDays - ytdLateDays) / ytdWindowDays) * 100);
       }
     }
 
     const uploadedAt = snapDoc.get("uploadedAt");
     const updatedAtIso = uploadedAt?.toDate ? uploadedAt.toDate().toISOString() : null;
 
-    // Optionally compute YTD/term % later; for now mirror latest week (%)
     return res.json({
       studentId: externalId,
       firstName: profile.firstName ?? null,
@@ -1199,8 +1228,8 @@ app.get("/api/me/summary", requireAuth("student"), async (req, res) => {
       rollClass: profile.rollClass ?? (rowDoc.get("rollClass") ?? null),
       term: year && term ? `${year}-T${term}` : label,
       snapshotLabel: label || (year && term && week ? `${year} Term ${term} Week ${week}` : null),
-      ytdPercent: previousPct,
-      termPercent: pct,
+      ytdPercent,
+      termPercent,
       trend,
       year,
       week,
@@ -1443,7 +1472,7 @@ app.get("/api/terms/:year/:term/classes", requireAuth("teacher"), async (req, re
       return res.status(400).json({ error: "invalid year/term" });
     }
 
-    // Get all snapshots for the term, then pick the most recent week
+    // Get all snapshots for the term and union their class lists.
     const snapsQS = await db
       .collection("schools").doc(SCHOOL_ID)
       .collection("snapshots")
@@ -1451,39 +1480,37 @@ app.get("/api/terms/:year/:term/classes", requireAuth("teacher"), async (req, re
       .where("term", "==", term)
       .get();
 
-    let latestDoc = null, bestWeek = -Infinity;
-    snapsQS.forEach(d => {
-      const w = d.get("week");
-      if (Number.isInteger(w) && w > bestWeek) { bestWeek = w; latestDoc = d; }
-    });
+    const snapshotDocs = snapsQS.docs.filter((d) => Number.isInteger(d.get("week")));
+    if (!snapshotDocs.length) return res.json([]);
 
-    if (!latestDoc) return res.json([]);
+    const classSet = new Set();
 
-    // Fast path: use snapshot-level classList if present
-    const existing = latestDoc.get("classList");
-    if (Array.isArray(existing) && existing.length) {
-      return res.json(
+    for (const snapshotDoc of snapshotDocs) {
+      const existing = snapshotDoc.get("classList");
+      if (Array.isArray(existing) && existing.length) {
         existing
           .filter(isSupportedRollClass)
-          .slice()
-          .sort()
-          .map(rollClass => ({ rollClass }))
-      );
+          .forEach((rollClass) => classSet.add(rollClass));
+        continue;
+      }
+
+      const rowsSnap = await snapshotDoc.ref.collection("rows").select("rollClass").get();
+      const snapshotClasses = new Set();
+      rowsSnap.forEach((r) => {
+        const rc = r.get("rollClass");
+        if (rc && isSupportedRollClass(rc)) snapshotClasses.add(rc);
+      });
+
+      const classes = Array.from(snapshotClasses).sort();
+      classes.forEach((rollClass) => classSet.add(rollClass));
+      await snapshotDoc.ref.set({ classList: classes }, { merge: true });
     }
 
-    // Slow path (first run / older snapshots): scan rows in THIS ONE snapshot, then seed classList
-    const rowsSnap = await latestDoc.ref.collection("rows").select("rollClass").get();
-    const set = new Set();
-    rowsSnap.forEach(r => {
-      const rc = r.get("rollClass");
-      if (rc && isSupportedRollClass(rc)) set.add(rc);
-    });
-    const classes = Array.from(set).sort();
-
-    // Seed classList for future fast reads
-    await latestDoc.ref.set({ classList: classes }, { merge: true });
-
-    return res.json(classes.map(rollClass => ({ rollClass })));
+    return res.json(
+      Array.from(classSet)
+        .sort()
+        .map((rollClass) => ({ rollClass }))
+    );
   } catch (e) {
     console.error("term classes failed:", e);
     // Map Firestore quota errors to 429 to make the client message clearer

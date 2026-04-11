@@ -49,6 +49,22 @@ let availableTerms = [];
 let students = [];
 let spinning = false;
 
+function showSignedOutState(message = "Sign in on Attendance Data to use the rewards board.") {
+  availableTerms = [];
+  students = [];
+  els.yearSelect.replaceChildren();
+  els.weekSelect.replaceChildren();
+  els.rollClass.replaceChildren();
+  els.termSelect.value = "1";
+  els.boardInfo.textContent = "Sign in required";
+  setStatusText(message);
+  setWinnerResult("No winner selected yet.");
+  renderStudentList([]);
+  drawWheel([]);
+  setSpinEnabled(false);
+  hideWinnerPopup();
+}
+
 async function authedFetch(path, init = {}) {
   const ready = await (window.firebaseReady || Promise.reject(new Error("firebaseReady missing")));
   const auth = ready.auth || window.firebaseAuth;
@@ -361,7 +377,10 @@ function spinWheel() {
     const auth = ready.auth || window.firebaseAuth;
 
     auth.onAuthStateChanged(async (user) => {
-      if (!user) return;
+      if (!user) {
+        showSignedOutState();
+        return;
+      }
       await populateTerms();
       await loadClasses();
       await loadBoard();
@@ -387,7 +406,7 @@ function spinWheel() {
       if (event.target === els.winnerPopup) hideWinnerPopup();
     });
 
-    drawWheel([]);
+    showSignedOutState("Checking sign-in...");
   } catch (err) {
     console.error("Rewards board init error:", err);
     setStatusText("Could not load board");
